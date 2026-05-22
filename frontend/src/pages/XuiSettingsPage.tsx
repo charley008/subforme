@@ -22,6 +22,7 @@ export function XuiSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [adminUser, setAdminUser] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.all([
@@ -35,12 +36,18 @@ export function XuiSettingsPage() {
     });
   }, []);
 
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
+  }
+
   async function handleSave() {
     setSaving(true);
     try {
       await putJSON("/api/config/app", config);
       if (newPassword) {
         await putJSON("/api/auth/password", { password: newPassword });
+        showToast(`密码已更新为：${newPassword}`);
         setNewPassword("");
         setMessage("设置已保存，密码已更新。");
       } else {
@@ -148,5 +155,26 @@ export function XuiSettingsPage() {
 
       <div className="message" style={{ marginTop: 16 }}>{message}</div>
     </div>
+
+{toast ? (
+  <div style={{
+    position: "fixed",
+    top: 24,
+    right: 24,
+    zIndex: 9999,
+    background: "#065f46",
+    color: "#fff",
+    padding: "14px 20px",
+    borderRadius: 10,
+    boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+    fontSize: 14,
+    fontWeight: 500,
+    maxWidth: 360,
+    wordBreak: "break-all",
+    animation: "slideIn 0.3s ease",
+  }}>
+    {toast}
+  </div>
+) : null}
   );
 }
