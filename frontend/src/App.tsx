@@ -8,9 +8,16 @@ import { TemplatesPage } from "./pages/TemplatesPage";
 import { UserPreviewPage } from "./pages/UserPreviewPage";
 import { XuiSettingsPage } from "./pages/XuiSettingsPage";
 
+const base = (() => {
+  const path = window.location.pathname;
+  // If deployed under a sub-path like /sub, use it as basename
+  const match = path.match(/^(\/[^/]+)/);
+  return match ? match[1] : "";
+})();
+
 export function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={base}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<Layout />}>
