@@ -98,10 +98,37 @@ func LoadProvidersYAML(dir string) (string, error) {
 
 func SaveProvidersYAML(dir, raw string) error {
 	var providers []ProviderAddon
-	if err := yaml.Unmarshal([]byte(raw), &providers); err != nil {
-		return fmt.Errorf("解析 providers.yaml 失败: %w", err)
+	if err := yaml.Unmarshal([]byte(raw), &providers); err == nil {
+		return SaveProviders(dir, providers)
 	}
-	return SaveProviders(dir, providers)
+
+	// Try parsing as a raw proxy-providers map and auto-convert to list format
+	var rawMap map[string]any
+	if err := yaml.Unmarshal([]byte(raw), &rawMap); err != nil {
+		return fmt.Errorf("无法解析 providers.yaml，请确认格式正确")
+	}
+
+	pp, ok := rawMap["proxy-providers"]
+	if !ok {
+		return fmt.Errorf("需要 proxy-providers 或列表格式")
+	}
+	ppMap, ok := pp.(map[string]any)
+	if !ok {
+		return fmt.Errorf("proxy-providers 必须是映射")
+	}
+
+	var converted []ProviderAddon
+	for name := range ppMap {
+		converted = append(converted, ProviderAddon{
+			ID:   name,
+			Name: name,
+			ProxyProviders: map[string]any{
+				name: ppMap[name],
+			},
+			ProxyGroups: []map[string]any{},
+		})
+	}
+	return SaveProviders(dir, converted)
 }
 
 func LoadBaseYAML(dir, mode string) (string, error) {
