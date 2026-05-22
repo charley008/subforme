@@ -14,14 +14,22 @@ type ProxyGroup struct {
 	Use      []string `yaml:"use,omitempty"`
 }
 
-func Build(cfg config.GroupConfig, nodes []xui.Node, groupNodes map[string][]string) []ProxyGroup {
+func Build(cfg config.GroupConfig, nodes []xui.Node, groupNodes map[string][]string, selectedProviders []string) []ProxyGroup {
 	defs := cfg.Groups
 	if len(defs) == 0 {
 		defs = defaultGroups(cfg)
 	}
 
+	providerSet := map[string]bool{}
+	for _, p := range selectedProviders {
+		providerSet[p] = true
+	}
+
 	out := make([]ProxyGroup, 0, len(defs))
 	for _, g := range defs {
+		if g.Provider != "" && !providerSet[g.Provider] {
+			continue
+		}
 		pg := ProxyGroup{Name: g.Name, Type: g.Type}
 		if g.URL != "" {
 			pg.URL = g.URL

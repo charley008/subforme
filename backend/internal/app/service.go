@@ -77,7 +77,7 @@ func (s Service) Generate(user string) ([]byte, error) {
 		return nil, fmt.Errorf("load %s template: %w", mode, err)
 	}
 
-	groupList := groups.Build(bundle.Groups, nodes, bundle.App.UserGroupNodes[user])
+	groupList := groups.Build(bundle.Groups, nodes, bundle.App.UserGroupNodes[user], bundle.App.UserProviders[user])
 	raw, err := generator.BuildFinalYAML(templateRaw, nodes, groupList, providers, bundle.App.UserProviders[user], bundle.Groups.GroupNames.Proxy)
 	if err != nil {
 		return nil, fmt.Errorf("build final yaml: %w", err)
