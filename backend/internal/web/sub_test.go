@@ -17,7 +17,7 @@ func (s stubSubscriptionService) Generate(user string) ([]byte, error) {
 
 func TestSubRequiresUserQuery(t *testing.T) {
 	router := NewRouter(Dependencies{})
-	req := httptest.NewRequest(http.MethodGet, "/sub", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/sub", nil)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)

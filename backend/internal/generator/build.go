@@ -5,9 +5,16 @@ import (
 	"subforme/backend/internal/groups"
 	"subforme/backend/internal/xui"
 	"subforme/backend/pkg/yamlx"
-
-	"gopkg.in/yaml.v3"
 )
+
+type groupEntry struct {
+	Name     string   `yaml:"name"`
+	Type     string   `yaml:"type"`
+	Proxies  []string `yaml:"proxies,omitempty"`
+	URL      string   `yaml:"url,omitempty"`
+	Interval int      `yaml:"interval,omitempty"`
+	Use      []string `yaml:"use,omitempty"`
+}
 
 func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.ProxyGroup, addons []config.ProviderAddon, selectedProviders []string, mainGroupName string) ([]byte, error) {
 	doc, err := yamlx.Parse(templateRaw)
@@ -61,21 +68,23 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 		}
 	}
 
-	groupMaps := convertGroups(groupList)
+	groupEntries := convertGroups(groupList)
 	for _, addon := range selectedSet {
 		attach := addon.AttachToGroup
 		if attach == "" {
 			attach = mainGroupName
 		}
-		groupMaps = appendProviderGroupEntry(groupMaps, attach, addon.Name)
-		groupMaps = append(groupMaps, addon.ProxyGroups...)
+		groupEntries = appendProviderGroupEntry(groupEntries, attach, addon.Name)
+		for _, g := range addon.ProxyGroups {
+			groupEntries = append(groupEntries, groupEntryFromMap(g))
+		}
 	}
 
 	proxyNode, err := yamlx.ToNode(proxies)
 	if err != nil {
 		return nil, err
 	}
-	groupNode, err := yamlx.ToNode(groupMaps)
+	groupNode, err := yamlx.ToNode(groupEntries)
 	if err != nil {
 		return nil, err
 	}
@@ -110,59 +119,80 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 	return yamlx.Marshal(doc)
 }
 
-func convertGroups(groupList []groups.ProxyGroup) []map[string]any {
-	out := make([]map[string]any, 0, len(groupList))
+func convertGroups(groupList []groups.ProxyGroup) []groupEntry {
+	out := make([]groupEntry, 0, len(groupList))
 	for _, group := range groupList {
-		item := map[string]any{
-			"name": group.Name,
-			"type": group.Type,
+		entry := groupEntry{
+			Name: group.Name,
+			Type: group.Type,
 		}
 		if len(group.Proxies) > 0 {
-			item["proxies"] = group.Proxies
+			entry.Proxies = group.Proxies
 		}
 		if len(group.Use) > 0 {
-			item["use"] = group.Use
+			entry.Use = group.Use
 		}
 		if group.URL != "" {
-			item["url"] = group.URL
+			entry.URL = group.URL
 		}
 		if group.Interval > 0 {
-			item["interval"] = group.Interval
+			entry.Interval = group.Interval
 		}
-		out = append(out, item)
+		out = append(out, entry)
 	}
 	return out
 }
 
-func appendProviderGroupEntry(groupsList []map[string]any, targetGroup string, entry string) []map[string]any {
-	for _, group := range groupsList {
-		if group["name"] != targetGroup {
+func appendProviderGroupEntry(entries []groupEntry, targetGroup string, entry string) []groupEntry {
+	for i, g := range entries {
+		if g.Name != targetGroup {
 			continue
 		}
-		current, _ := group["proxies"].([]string)
-		if current == nil {
-			if generic, ok := group["proxies"].([]any); ok {
-				for _, item := range generic {
-					if text, ok := item.(string); ok {
-						current = append(current, text)
-					}
-				}
+		for _, p := range g.Proxies {
+			if p == entry {
+				return entries
 			}
 		}
-		for _, existing := range current {
-			if existing == entry {
-				group["proxies"] = current
-				return groupsList
-			}
-		}
-		group["proxies"] = append(current, entry)
-		return groupsList
+		entries[i].Proxies = append(entries[i].Proxies, entry)
+		return entries
 	}
-	return groupsList
+	return entries
 }
 
-func nodeToMap(node *yaml.Node) map[string]any {
-	out := map[string]any{}
-	_ = node.Decode(&out)
-	return out
+func groupEntryFromMap(m map[string]any) groupEntry {
+	e := groupEntry{}
+	if v, ok := m["name"].(string); ok {
+		e.Name = v
+	}
+	if v, ok := m["type"].(string); ok {
+		e.Type = v
+	}
+	if v, ok := m["url"].(string); ok {
+		e.URL = v
+	}
+	if v, ok := m["interval"].(int); ok {
+		e.Interval = v
+	}
+	if v, ok := m["proxies"].([]string); ok {
+		e.Proxies = v
+	}
+	if v, ok := m["use"].([]string); ok {
+		e.Use = v
+	}
+	// Handle []any to []string conversion for proxies/use
+	if v, ok := m["proxies"].([]any); ok {
+		for _, p := range v {
+			if s, ok := p.(string); ok {
+				e.Proxies = append(e.Proxies, s)
+			}
+		}
+	}
+	if v, ok := m["use"].([]any); ok {
+		for _, p := range v {
+			if s, ok := p.(string); ok {
+				e.Use = append(e.Use, s)
+			}
+		}
+	}
+	return e
 }
