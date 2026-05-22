@@ -154,27 +154,27 @@ export function XuiSettingsPage() {
       </div>
 
       <div className="message" style={{ marginTop: 16 }}>{message}</div>
-    </div>
 
-{toast ? (
-  <div style={{
-    position: "fixed",
-    top: 24,
-    right: 24,
-    zIndex: 9999,
-    background: "#065f46",
-    color: "#fff",
-    padding: "14px 20px",
-    borderRadius: 10,
-    boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
-    fontSize: 14,
-    fontWeight: 500,
-    maxWidth: 360,
-    wordBreak: "break-all",
-    animation: "slideIn 0.3s ease",
-  }}>
-    {toast}
-  </div>
-) : null}
+      {toast ? (
+        <div style={{
+          position: "fixed",
+          top: 24,
+          right: 24,
+          zIndex: 9999,
+          background: "#065f46",
+          color: "#fff",
+          padding: "14px 20px",
+          borderRadius: 10,
+          boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+          fontSize: 14,
+          fontWeight: 500,
+          maxWidth: 360,
+          wordBreak: "break-all",
+          animation: "slideIn 0.3s ease",
+        }}>
+          {toast}
+        </div>
+      ) : null}
+    </div>
   );
 }
