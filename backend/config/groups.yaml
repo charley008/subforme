@@ -1,0 +1,16 @@
+groups:
+  - name: PROXY
+    type: select
+  - name: AUTO
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+  - name: GPT
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+  - name: 91vpn
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    provider: 91vpn

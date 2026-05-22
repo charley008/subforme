@@ -1,0 +1,95 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Build Linux binary
+        run: |
+          cd backend
+          go build -o ../release/subforme ./cmd/subforme
+
+      - name: Build Windows binary
+        run: |
+          cd backend
+          GOOS=windows GOARCH=amd64 go build -o ../release/subforme.exe ./cmd/subforme
+
+      - name: Package Linux
+        run: |
+          cd release
+          dir="subforme-linux-x86_64"
+          mkdir "$dir"
+          cp subforme "$dir/subforme"
+          cp -r ../frontend/dist "$dir/web"
+          cp -r ../backend/config "$dir/config"
+          cp ../README.md "$dir/"
+          tar czf "$dir.tar.gz" "$dir/"
+
+      - name: Package Windows
+        run: |
+          cd release
+          dir="subforme-windows-x86_64"
+          mkdir "$dir"
+          cp subforme.exe "$dir/subforme.exe"
+          cp -r ../frontend/dist "$dir/web"
+          cp -r ../backend/config "$dir/config"
+          cp ../README.md "$dir/"
+          echo "@echo off" > "$dir/start.bat"
+          echo "cd /d %%~dp0" >> "$dir/start.bat"
+          echo "subforme.exe" >> "$dir/start.bat"
+          cd "$dir"
+          zip -r "../$dir.zip" *
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/subforme-linux-x86_64.tar.gz
+            release/subforme-windows-x86_64.zip
+          generate_release_notes: true
+
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            charley008/subforme:latest
+            charley008/subforme:${{ steps.version.outputs.version }}

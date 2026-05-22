@@ -1,0 +1,50 @@
+proxies: []
+proxy-groups: []
+rule-providers:
+  proxy:
+    type: http
+    behavior: domain
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt
+    path: ./ruleset/proxy.yaml
+    interval: 86400
+    proxy: DIRECT
+  cncidr:
+    type: http
+    behavior: ipcidr
+    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt
+    path: ./ruleset/cncidr.yaml
+    interval: 86400
+    proxy: DIRECT
+  telegramcidr:
+    type: http
+    behavior: ipcidr
+    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/telegramcidr.txt
+    path: ./ruleset/telegramcidr.yaml
+    interval: 86400
+    proxy: DIRECT
+  lancidr:
+    type: http
+    behavior: ipcidr
+    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt
+    path: ./ruleset/lancidr.yaml
+    interval: 86400
+    proxy: DIRECT
+rules:
+  - DOMAIN,cn.bing.com,DIRECT
+  - DOMAIN,api.cloudflare.com,DIRECT
+  - DOMAIN,www.gstatic.com,DIRECT
+  - DOMAIN,gst.prod.dl.playstation.net,DIRECT
+  - DOMAIN-SUFFIX,douyin.com,DIRECT
+  - GEOSITE,openai,手动选择
+  - GEOSITE,anthropic,手动选择
+  - GEOSITE,google-gemini,手动选择
+  - GEOSITE,geolocation-!cn,自动选择
+  - GEOSITE,microsoft@cn,DIRECT
+  - GEOSITE,apple-cn,DIRECT 
+  - GEOSITE,steam@cn,DIRECT
+  - GEOSITE,cn,DIRECT
+  - RULE-SET,lancidr,DIRECT
+  - RULE-SET,cncidr,DIRECT
+  - RULE-SET,direct,DIRECT
+  - MATCH,自动选择
+  #自动选择，手动选择 请修改为代理分组中存在的组名

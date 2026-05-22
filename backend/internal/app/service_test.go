@@ -1,0 +1,115 @@
+package app
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"subforme/backend/internal/config"
+	"subforme/backend/internal/xui"
+)
+
+func TestGenerateReturnsErrorWhenUserMissing(t *testing.T) {
+	svc := Service{}
+	_, err := svc.Generate("charley")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestGenerateBuildsYAMLFromBundleAndNodes(t *testing.T) {
+	svc := Service{
+		ConfigDir: "ignored",
+		Loader: func(dir string) (config.Bundle, error) {
+			return config.Bundle{
+				App: config.AppConfig{
+					Mode: "whitelist",
+					XUI:  config.XUIConfig{BaseURL: "https://panel.example.com/xui", APIKey: "token"},
+				},
+				BaseWhitelist: config.BaseConfig{
+					Mode:        "rule",
+					LogLevel:    "info",
+					Proxies:     []any{},
+					ProxyGroups: []any{},
+					Rules:       []string{"MATCH,DIRECT"},
+				},
+				BaseBlacklist: config.BaseConfig{
+					Mode:        "rule",
+					LogLevel:    "info",
+					Proxies:     []any{},
+					ProxyGroups: []any{},
+					Rules:       []string{"MATCH,PROXY"},
+				},
+				Groups: config.GroupConfig{
+					Regions: map[string][]string{
+						"HK": {"HK"},
+					},
+					GroupNames: config.GroupNames{
+						Proxy: "节点选择",
+						Auto:  "自动选择",
+						Other: "其他节点",
+					},
+					Healthcheck: config.GroupHealthcheck{
+						URL:             "https://www.gstatic.com/generate_204",
+						IntervalSeconds: 300,
+					},
+				},
+			}, nil
+		},
+		ResolverFactory: func(cfg config.XUIConfig) XUIResolver {
+			return fakeResolver{
+				nodes: []xui.Node{
+					{
+						Name:              "HK-01",
+						Type:              "vless",
+						Server:            "hk.example.com",
+						Port:              443,
+						UUID:              "uuid-1",
+						TLS:               true,
+						ClientFingerprint: "chrome",
+					},
+				},
+			}
+		},
+		TemplateLoader: func(dir, mode string) (string, error) {
+			return "mixed-port: 10801\nallow-lan: true\nmode: rule\nproxies: []\nproxy-groups: []\nrules:\n  - MATCH,DIRECT\n", nil
+		},
+	}
+
+	raw, err := svc.Generate("charley")
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+
+	got := string(raw)
+	if !strings.Contains(got, "name: HK-01") {
+		t.Fatalf("expected generated proxy in yaml, got %s", got)
+	}
+	if !strings.Contains(got, "name: 节点选择") {
+		t.Fatalf("expected generated group in yaml, got %s", got)
+	}
+}
+
+type fakeResolver struct {
+	nodes  []xui.Node
+	users  []xui.UserSummary
+	avail  []xui.AvailableNode
+	status xui.ConnectionStatus
+	err    error
+}
+
+func (f fakeResolver) ResolveUserNodes(ctx context.Context, query string) ([]xui.Node, error) {
+	return f.nodes, f.err
+}
+
+func (f fakeResolver) SearchUsers(ctx context.Context, query string) ([]xui.UserSummary, error) {
+	return f.users, f.err
+}
+
+func (f fakeResolver) ListAvailableNodes(ctx context.Context) ([]xui.AvailableNode, error) {
+	return f.avail, f.err
+}
+
+func (f fakeResolver) TestConnection(ctx context.Context) (xui.ConnectionStatus, error) {
+	return f.status, f.err
+}

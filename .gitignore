@@ -1,0 +1,10 @@
+.git
+release/
+node_modules/
+dist/
+.vite/
+*.log
+.env
+.superpowers/
+.DS_Store
+Thumbs.db

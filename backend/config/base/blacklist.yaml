@@ -1,0 +1,123 @@
+mixed-port: 7890
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: true
+sniffer:
+  enable: true
+  sniff:
+    TLS:
+      ports: [443, 6443]
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+dns:
+  enable: true
+  ipv6: false
+  listen: ":53"
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  prefer-h3: false
+  respect-rules: false
+  use-hosts: false
+  use-system-hosts: false
+  fake-ip-filter:
+    - "*.lan"
+    - "*.local"
+    - "*.arpa"
+    - "time.*.com"
+    - "ntp.*.com"
+    - "+.market.xiaomi.com"
+    - "localhost.ptlogin2.qq.com"
+    - "*.msftncsi.com"
+    - "www.msftconnecttest.com"
+    - "+.4738.org"
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+  fallback:
+    - https://doh.dns.sb/dns-query#自动选择
+    - https://dns.cloudflare.com/dns-query#自动选择
+    - https://dns.adguard-dns.com/dns-query#自动选择
+    - https://dns.google/dns-query#自动选择
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+    ipcidr:
+      - 240.0.0.0/4
+      - "0.0.0.0/32"
+    domain:
+      - "+.google.com"
+      - "+.facebook.com"
+      - "+.youtube.com"
+  nameserver-policy:
+    "geosite:apple": https://dns.alidns.com/dns-query
+    "+.tjstats.com": https://dns.alidns.com/dns-query
+    "+.gstatic.com": https://dns.alidns.com/dns-query
+    "fastly.jsdelivr.net": https://dns.alidns.com/dns-query
+  proxy-server-nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+tun:
+  enable: false
+  stack: gvisor
+  auto-route: true
+  auto-detect-interface: true
+  dns-hijack:
+    - any:53
+    - tcp://any:53
+proxies: []
+proxy-groups: []
+proxy-providers: {}
+rule-providers:
+  proxy:
+    type: http
+    behavior: domain
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt
+    path: ./ruleset/proxy.yaml
+    interval: 86400
+    proxy: DIRECT
+  cncidr:
+    type: http
+    behavior: ipcidr
+    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt
+    path: ./ruleset/cncidr.yaml
+    interval: 86400
+    proxy: DIRECT
+  telegramcidr:
+    type: http
+    behavior: ipcidr
+    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/telegramcidr.txt
+    path: ./ruleset/telegramcidr.yaml
+    interval: 86400
+    proxy: DIRECT
+  lancidr:
+    type: http
+    behavior: ipcidr
+    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt
+    path: ./ruleset/lancidr.yaml
+    interval: 86400
+    proxy: DIRECT
+rules:
+  - DOMAIN,cn.bing.com,DIRECT
+  - DOMAIN,api.cloudflare.com,DIRECT
+  - DOMAIN,www.gstatic.com,DIRECT
+  - DOMAIN,gst.prod.dl.playstation.net,DIRECT
+  - DOMAIN-SUFFIX,douyin.com,DIRECT
+  - GEOSITE,openai,手动选择
+  - GEOSITE,anthropic,手动选择
+  - GEOSITE,google-gemini,手动选择
+  - GEOSITE,geolocation-!cn,自动选择
+  - GEOSITE,microsoft@cn,DIRECT
+  - GEOSITE,apple-cn,DIRECT
+  - GEOSITE,steam@cn,DIRECT
+  - GEOSITE,cn,DIRECT
+  - RULE-SET,lancidr,DIRECT
+  - RULE-SET,cncidr,DIRECT
+  - RULE-SET,direct,DIRECT
+  - MATCH,自动选择
+  #自动选择，手动选择 请修改为代理分组中存在的组名

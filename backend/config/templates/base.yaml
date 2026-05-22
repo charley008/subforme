@@ -1,0 +1,73 @@
+mixed-port: 7890
+allow-lan: true
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: true
+sniffer:
+  enable: true
+  sniff:
+    TLS:
+      ports: [443, 6443]
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+dns:
+  enable: true
+  ipv6: false
+  listen: ":53"
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  prefer-h3: false
+  respect-rules: false
+  use-hosts: false
+  use-system-hosts: false
+  fake-ip-filter:
+    - "*.lan"
+    - "*.local"
+    - "*.arpa"
+    - "time.*.com"
+    - "ntp.*.com"
+    - "+.market.xiaomi.com"
+    - "localhost.ptlogin2.qq.com"
+    - "*.msftncsi.com"
+    - "www.msftconnecttest.com"
+    - "+.4738.org"
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+  fallback:
+    - https://doh.dns.sb/dns-query#自动选择
+    - https://dns.cloudflare.com/dns-query#自动选择
+    - https://dns.adguard-dns.com/dns-query#自动选择
+    - https://dns.google/dns-query#自动选择
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+    ipcidr:
+      - 240.0.0.0/4
+      - "0.0.0.0/32"
+    domain:
+      - "+.google.com"
+      - "+.facebook.com"
+      - "+.youtube.com"
+  nameserver-policy:
+    "geosite:apple": https://dns.alidns.com/dns-query
+    "+.tjstats.com": https://dns.alidns.com/dns-query
+    "+.gstatic.com": https://dns.alidns.com/dns-query
+    "fastly.jsdelivr.net": https://dns.alidns.com/dns-query
+  proxy-server-nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+tun:
+  enable: false
+  stack: gvisor
+  auto-route: true
+  auto-detect-interface: true
+  dns-hijack:
+    - any:53
+    - tcp://any:53
+proxy-providers: {}

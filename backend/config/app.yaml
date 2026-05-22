@@ -1,0 +1,11 @@
+mode: whitelist
+cache_ttl_seconds: 60
+healthcheck_url: https://www.gstatic.com/generate_204
+healthcheck_interval_seconds: 300
+xui:
+    base_url: https://www.test.com/xui
+    api_key: API Key
+user_modes:
+
+
+
