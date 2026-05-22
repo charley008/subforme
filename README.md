@@ -34,14 +34,13 @@ Web UI 中配置的节点/分组/策略
 docker run -d \
   --name subforme \
   -p 8080:8080 \
-  -e SUBFORME_ADMIN_USERNAME=admin \
-  -e SUBFORME_ADMIN_PASSWORD=your-password \
-  -e SUBFORME_SESSION_SECRET=random-secret \
   -e SUBFORME_XUI_BASE_URL=https://your-panel.com/xui \
   -e SUBFORME_XUI_API_KEY=your-api-key \
   -v ./config:/app/config \
   charley008/subforme:latest
 ```
+
+> 默认管理员账号 `admin` / `123456`，建议登录后修改密码。也可通过环境变量 `SUBFORME_ADMIN_PASSWORD` 自定义。
 
 或者使用 docker-compose（推荐）：
 ```bash
@@ -57,7 +56,7 @@ docker compose up -d
 {
   "listen": ":8080",
   "admin_username": "admin",
-  "admin_password": "your-password",
+  "admin_password": "123456",
   "session_secret": "random-secret",
   "config_dir": ".",
   "frontend_dir": "../web",
