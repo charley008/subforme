@@ -99,13 +99,23 @@ server {
     listen 443 ssl;
     server_name example.com;
 
+    location = /subforme {
+        return 301 /subforme/;
+    }
     location /subforme/ {
         proxy_pass http://127.0.0.1:8080/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
 }
 ```
+
+> 订阅链接格式：`https://example.com/api/sub?user=xxx`
 
 ## 首次使用流程
 
