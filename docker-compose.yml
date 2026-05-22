@@ -5,6 +5,7 @@ services:
     image: charley008/subforme:latest
     container_name: subforme
     restart: unless-stopped
+    network_mode: bridge
     ports:
       - "8080:8080"
     environment:
@@ -12,19 +13,10 @@ services:
       # - SUBFORME_ADMIN_USERNAME=admin
       # - SUBFORME_ADMIN_PASSWORD=123456
       - SUBFORME_SESSION_SECRET=change-me-too
-
       # 3x-ui 面板连接（API Key 方式，推荐）
       - SUBFORME_XUI_BASE_URL=https://your-panel.com/xui
       - SUBFORME_XUI_API_KEY=your-api-key-here
-
-      # 3x-ui 面板连接（用户名密码方式，不填 API Key 时使用）
-      # - SUBFORME_XUI_USERNAME=
-      # - SUBFORME_XUI_PASSWORD=
-
       # 监听地址
       # - SUBFORME_LISTEN=:8080
     volumes:
-      # 持久化配置（app.yaml / nodes.yaml / groups.yaml 等）
       - ./subforme-config:/app/config
-    # 可选：使用自定义 config.json
-    # - ./config.json:/app/config/config.json
