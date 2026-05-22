@@ -15,8 +15,12 @@ type Service struct {
 	Password string
 }
 
-func (s Service) Check(username, password string) bool {
+func (s *Service) Check(username, password string) bool {
 	return username == s.Username && password == s.Password
+}
+
+func (s *Service) UpdatePassword(newPassword string) {
+	s.Password = newPassword
 }
 
 func SetSession(w http.ResponseWriter, secret string) {

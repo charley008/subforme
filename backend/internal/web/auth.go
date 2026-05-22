@@ -66,6 +66,9 @@ func registerAuthRoutes(mux *http.ServeMux, deps Dependencies) {
 			http.Error(w, "save password failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		if deps.AuthService != nil {
+			deps.AuthService.UpdatePassword(req.Password)
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 }

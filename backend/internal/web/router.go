@@ -15,6 +15,7 @@ type SubscriptionService interface {
 
 type AuthService interface {
 	Check(username, password string) bool
+	UpdatePassword(newPassword string)
 }
 
 type ConfigService interface {

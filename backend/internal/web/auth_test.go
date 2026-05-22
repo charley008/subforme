@@ -27,6 +27,8 @@ func (s stubAuthService) Check(username, password string) bool {
 	return s.valid
 }
 
+func (s stubAuthService) UpdatePassword(newPassword string) {}
+
 func TestLoginRejectsInvalidCredentials(t *testing.T) {
 	router := NewRouter(Dependencies{
 		AuthService:   stubAuthService{valid: false},

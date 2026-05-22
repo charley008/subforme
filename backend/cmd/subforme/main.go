@@ -27,6 +27,11 @@ func main() {
 
 	service := app.NewService(runtimeConfig.ConfigDir, runtimeConfig.XUI)
 
+	authSvc := &app.StaticAuthService{
+		Username: runtimeConfig.AdminUsername,
+		Password: runtimeConfig.AdminPassword,
+	}
+
 	handler := web.NewRouter(web.Dependencies{
 		SubscriptionService: service,
 		ConfigService:       service,
@@ -36,10 +41,7 @@ func main() {
 		FrontendDir:         runtimeConfig.FrontendDir,
 		AdminUsername:       runtimeConfig.AdminUsername,
 		RuntimePath:         runtimeConfig.RuntimePath,
-		AuthService: app.StaticAuthService{
-			Username: runtimeConfig.AdminUsername,
-			Password: runtimeConfig.AdminPassword,
-		},
+		AuthService:         authSvc,
 	})
 
 	log.Printf("subforme backend listening on %s using config dir %s", runtimeConfig.Listen, runtimeConfig.ConfigDir)
