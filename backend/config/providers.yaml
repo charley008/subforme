@@ -2,16 +2,16 @@
   name: test
   proxy_providers:
     test:
-        health-check:
-            enable: true
-            expected-status: 204
-            interval: 300
-            lazy: true
-            timeout: 5000
-            url: https://www.gstatic.com/generate_204
-        interval: 3600
-        path: ./proxy_providers/test.yaml
-        proxy: DIRECT
-        type: http
-        url: https://www.test.com/test.yml
+      health-check:
+        enable: true
+        expected-status: 204
+        interval: 300
+        lazy: true
+        timeout: 5000
+        url: https://www.gstatic.com/generate_204
+      interval: 3600
+      path: ./proxy_providers/test.yaml
+      proxy: DIRECT
+      type: http
+      url: https://www.test.com/test.yml
   proxy_groups: []

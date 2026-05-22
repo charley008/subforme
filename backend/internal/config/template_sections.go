@@ -39,73 +39,33 @@ var templateKeyOrder = []string{
 	"rules",
 }
 
-var modeSectionKeys = []string{"proxies", "proxy-groups", "rule-providers", "rules"}
-
 func ensureTemplateLayout(dir string) error {
 	templatesDir := filepath.Join(dir, "templates")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		return err
 	}
 
-	basePath := filepath.Join(templatesDir, "base.yaml")
-	whitelistPath := filepath.Join(templatesDir, "whitelist.yaml")
-	blacklistPath := filepath.Join(templatesDir, "blacklist.yaml")
-
-	baseExists := fileExists(basePath)
-	whiteExists := fileExists(whitelistPath)
-	blackExists := fileExists(blacklistPath)
-
-	if !baseExists || !whiteExists || !blackExists {
-		whiteRaw, err := readYAMLText(filepath.Join(dir, "base", "whitelist.yaml"))
-		if err != nil {
-			return err
+	for _, name := range []string{"base.yaml", "whitelist.yaml", "blacklist.yaml"} {
+		path := filepath.Join(templatesDir, name)
+		if fileExists(path) {
+			continue
 		}
-		blackRaw, err := readYAMLText(filepath.Join(dir, "base", "blacklist.yaml"))
-		if err != nil {
-			return err
-		}
-		baseRaw, whiteSectionRaw, err := splitTemplateSections(whiteRaw)
-		if err != nil {
-			return err
-		}
-		_, blackSectionRaw, err := splitTemplateSections(blackRaw)
-		if err != nil {
-			return err
-		}
-		if !baseExists {
-			if err := os.WriteFile(basePath, []byte(baseRaw), 0o644); err != nil {
+		switch name {
+		case "base.yaml":
+			if err := os.WriteFile(path, []byte("mode: rule\nlog-level: info\n"), 0o644); err != nil {
 				return err
 			}
-		}
-		if !whiteExists {
-			if err := os.WriteFile(whitelistPath, []byte(whiteSectionRaw), 0o644); err != nil {
+		case "whitelist.yaml":
+			if err := os.WriteFile(path, []byte("proxies: []\nproxy-groups: []\nrule-providers: {}\nrules: []\n"), 0o644); err != nil {
 				return err
 			}
-		}
-		if !blackExists {
-			if err := os.WriteFile(blacklistPath, []byte(blackSectionRaw), 0o644); err != nil {
+		case "blacklist.yaml":
+			if err := os.WriteFile(path, []byte("proxies: []\nproxy-groups: []\nrule-providers: {}\nrules: []\n"), 0o644); err != nil {
 				return err
 			}
 		}
 	}
 
-	for _, mode := range []string{"whitelist", "blacklist"} {
-		baseRaw, err := readYAMLText(basePath)
-		if err != nil {
-			return err
-		}
-		modeRaw, err := readYAMLText(filepath.Join(templatesDir, mode+".yaml"))
-		if err != nil {
-			return err
-		}
-		raw, err := mergeTemplateSections(baseRaw, modeRaw)
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(dir, "base", mode+".yaml"), []byte(raw), 0o644); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -209,49 +169,6 @@ func mergeTemplateSections(baseRaw, modeRaw string) (string, error) {
 	appendUnknownKeys(mergedRoot, modeRoot, used)
 
 	return stringMust(yamlx.Marshal(mergedRoot))
-}
-
-func splitTemplateSections(raw string) (string, string, error) {
-	baseDoc, err := yamlx.Parse(raw)
-	if err != nil {
-		return "", "", err
-	}
-	modeDoc, err := yamlx.Parse(raw)
-	if err != nil {
-		return "", "", err
-	}
-
-	for _, key := range modeSectionKeys {
-		_ = yamlx.DeleteMappingValue(baseDoc, key)
-	}
-
-	baseRaw, err := yamlx.Marshal(baseDoc)
-	if err != nil {
-		return "", "", err
-	}
-
-	modeRoot, err := rootMapping(modeDoc)
-	if err != nil {
-		return "", "", err
-	}
-	modeOnly := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-	for _, key := range modeSectionKeys {
-		if value, ok := mappingValue(modeRoot, key); ok {
-			appendPair(modeOnly, key, value)
-			continue
-		}
-		switch key {
-		case "rule-providers":
-			appendPair(modeOnly, key, &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"})
-		default:
-			appendPair(modeOnly, key, &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"})
-		}
-	}
-	modeRaw, err := yamlx.Marshal(modeOnly)
-	if err != nil {
-		return "", "", err
-	}
-	return string(baseRaw), string(modeRaw), nil
 }
 
 func templateSectionPath(dir, section string) (string, error) {

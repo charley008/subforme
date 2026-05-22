@@ -17,10 +17,10 @@ func LoadBundle(dir string) (Bundle, error) {
 	if err := readYAML(filepath.Join(dir, "app.yaml"), &bundle.App); err != nil {
 		return Bundle{}, fmt.Errorf("load app config: %w", err)
 	}
-	if err := readYAML(filepath.Join(dir, "base", "whitelist.yaml"), &bundle.BaseWhitelist); err != nil {
+	if err := readYAML(filepath.Join(dir, "templates", "whitelist.yaml"), &bundle.BaseWhitelist); err != nil {
 		return Bundle{}, fmt.Errorf("load whitelist base: %w", err)
 	}
-	if err := readYAML(filepath.Join(dir, "base", "blacklist.yaml"), &bundle.BaseBlacklist); err != nil {
+	if err := readYAML(filepath.Join(dir, "templates", "blacklist.yaml"), &bundle.BaseBlacklist); err != nil {
 		return Bundle{}, fmt.Errorf("load blacklist base: %w", err)
 	}
 	if err := readYAML(filepath.Join(dir, "groups.yaml"), &bundle.Groups); err != nil {
@@ -172,7 +172,7 @@ func writeYAML(path string, value any) error {
 func baseConfigPath(dir, mode string) (string, error) {
 	switch mode {
 	case "whitelist", "blacklist":
-		return filepath.Join(dir, "base", mode+".yaml"), nil
+		return filepath.Join(dir, "templates", mode+".yaml"), nil
 	default:
 		return "", fmt.Errorf("unsupported mode %q", mode)
 	}

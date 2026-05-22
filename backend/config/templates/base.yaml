@@ -32,7 +32,6 @@ dns:
     - "localhost.ptlogin2.qq.com"
     - "*.msftncsi.com"
     - "www.msftconnecttest.com"
-    - "+.4738.org"
   default-nameserver:
     - 223.5.5.5
     - 119.29.29.29
