@@ -122,7 +122,7 @@ server {
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `SUBFORME_ADMIN_USERNAME` | 后台管理员用户名 | `admin` |
-| `SUBFORME_ADMIN_PASSWORD` | 后台管理员密码 | `123456' |
+| `SUBFORME_ADMIN_PASSWORD` | 后台管理员密码 | `123456` |
 | `SUBFORME_SESSION_SECRET` | Session 加密密钥 | - |
 | `SUBFORME_XUI_BASE_URL` | 3x-ui 面板地址 | - |
 | `SUBFORME_XUI_API_KEY` | 3x-ui API Key | - |
