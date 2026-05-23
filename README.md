@@ -26,29 +26,35 @@ Web UI 中配置的节点/分组/策略
 最终完整的 Mihomo config.yaml
 ```
 
+## v1.1.0 新功能
+
+- **本地 SQLite 数据库**：用户数据不再依赖实时 API，支持离线管理和缓存
+- **多 3x-ui 面板管理**：支持添加多台 VPS 面板，集中管理
+- **一键同步**：主面板新建用户 → 导入本地 DB → 同步到其他面板
+- **用户删除同步**：主面板删除用户 → 同步后其他面板和本地同时删除
+- **实时流量查看**：点击"刷新流量"即可查看各节点上用户的流量统计
+- **节点-服务器绑定**：节点关联到对应服务器，流量按服务器归类显示
+
 ## 快速开始
 
-### 方式一：Docker 运行
+### Docker 运行
 
 ```bash
 docker run -d \
   --name subforme \
   -p 8080:8080 \
-  -e SUBFORME_XUI_BASE_URL=https://your-panel.com/xui \
-  -e SUBFORME_XUI_API_KEY=your-api-key \
   -v ./config:/app/config \
   charley008/subforme:latest
 ```
 
-> 默认管理员账号 `admin` / `123456`，建议登录后修改密码。也可通过环境变量 `SUBFORME_ADMIN_PASSWORD` 自定义。
+> 默认管理员账号 `admin` / `123456`，建议登录后修改密码。3x-ui 面板配置通过 Web UI 添加。
 
-或者使用 docker-compose（推荐）：
+或者使用 docker-compose：
 ```bash
-# 编辑 docker-compose.yml 填入配置后
 docker compose up -d
 ```
 
-### 方式二：直接运行
+### 直接运行
 
 下载对应平台的 release，解压后修改 `config/config.json`：
 
@@ -59,11 +65,7 @@ docker compose up -d
   "admin_password": "123456",
   "session_secret": "random-secret",
   "config_dir": ".",
-  "frontend_dir": "../web",
-  "xui": {
-    "base_url": "https://your-panel.com/xui",
-    "api_key": "your-api-key"
-  }
+  "frontend_dir": "../web"
 }
 ```
 
@@ -73,6 +75,28 @@ docker compose up -d
 ```
 
 打开 `http://your-server:8080` 登录。
+
+## 首次使用流程
+
+```
+1. 服务器 → 添加你的 3x-ui 面板（名称、地址、API Key）
+2. 节点 → 添加 VPS 机器，并关联到对应服务器
+3. 代理分组 → 定义分组（手动选择、自动测速、第三方等）
+4. 用户 → 从主面板导入用户 → 勾选节点 → 分组编辑器分配节点
+5. 用户 → 点击预览或复制订阅链接
+6. 多面板同步 → 添加其他面板 → 点击"同步到非主面板服务器"
+```
+
+## 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `SUBFORME_ADMIN_USERNAME` | 后台管理员用户名 | `admin` |
+| `SUBFORME_ADMIN_PASSWORD` | 后台管理员密码 | `123456` |
+| `SUBFORME_SESSION_SECRET` | Session 加密密钥 | - |
+| `SUBFORME_CONFIG_DIR` | 配置目录 | `/app/config` |
+| `SUBFORME_FRONTEND_DIR` | 前端静态文件目录 | `/app/web` |
+| `SUBFORME_LISTEN` | 监听地址 | `:8080` |
 
 ## Nginx 反代
 
@@ -117,29 +141,6 @@ server {
 
 > 订阅链接格式：`https://example.com/api/sub?user=xxx`
 
-## 首次使用流程
-
-```
-1. 设置 → 填入 3x-ui 面板地址和 API Key → 测试连接
-2. 节点 → 添加你的 VPS 服务器（名称 + 地址）
-3. 代理分组 → 定义分组（PROXY 手动选择、GPT 自动测速、 第三方等）
-4. 用户 → 为每个用户勾选 VPS，并在分组编辑器中分配各节点
-5. 用户 → 点击预览或复制订阅链接
-```
-
-## 环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `SUBFORME_ADMIN_USERNAME` | 后台管理员用户名 | `admin` |
-| `SUBFORME_ADMIN_PASSWORD` | 后台管理员密码 | `123456` |
-| `SUBFORME_SESSION_SECRET` | Session 加密密钥 | - |
-| `SUBFORME_XUI_BASE_URL` | 3x-ui 面板地址 | - |
-| `SUBFORME_XUI_API_KEY` | 3x-ui API Key | - |
-| `SUBFORME_CONFIG_DIR` | 配置目录 | `/app/config` |
-| `SUBFORME_FRONTEND_DIR` | 前端静态文件目录 | `/app/web` |
-| `SUBFORME_LISTEN` | 监听地址 | `:8080` |
-
 ## 本地构建
 
 ### 构建前端
@@ -179,10 +180,11 @@ subforme/
 │   ├── internal/     # 业务逻辑
 │   │   ├── app/      # 服务层
 │   │   ├── config/   # 配置管理
+│   │   ├── db/       # SQLite 数据库层
 │   │   ├── generator/# YAML 生成器
 │   │   ├── groups/   # 代理分组
 │   │   ├── web/      # HTTP API
-│   │   └── xui/      # 3x-ui 
+│   │   └── xui/      # 3x-ui API 客户端
 │   └── config/       # 默认配置
 ├── frontend/         # React + Vite 前端
 └── release/          # 构建产物
@@ -190,10 +192,10 @@ subforme/
 
 ## 技术栈
 
-- **后端**: Go 1.26
+- **后端**: Go 1.26 + SQLite
 - **前端**: React 19 + Vite
-- **配置**: YAML
-- **API**: 3x-ui API (Session/Cookie)
+- **配置**: YAML + SQLite
+- **API**: 3x-ui REST API
 
 ## License
 
