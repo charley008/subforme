@@ -105,28 +105,7 @@ export function XuiSettingsPage() {
         </div>
       </div>
 
-      <div style={{ height: 16 }} />
 
-      <div className="form-card">
-        <div className="card-header">
-          <h2>3x-ui</h2>
-          <button type="button" className="btn btn-sm" onClick={() => void handleTest()} disabled={testing}>
-            {testing ? "测试中..." : "测试连接"}
-          </button>
-        </div>
-        <div className="form-grid">
-          <div className="form-group full-width">
-            <label>面板地址</label>
-            <input value={config.xui.base_url} onChange={(e) => setConfig((c) => ({ ...c, xui: { ...c.xui, base_url: e.target.value } }))} />
-          </div>
-          <div className="form-group full-width">
-            <label>API Key</label>
-            <input value={config.xui.api_key ?? ""} onChange={(e) => setConfig((c) => ({ ...c, xui: { ...c.xui, api_key: e.target.value } }))} />
-          </div>
-        </div>
-      </div>
-
-      <div style={{ height: 16 }} />
 
       <div className="form-card">
         <div className="card-header"><h2>默认策略</h2></div>

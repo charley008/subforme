@@ -9,7 +9,13 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 )
+
+type apiResponse struct {
+	Success bool   `json:"success"`
+	Msg     string `json:"msg"`
+}
 
 type Client struct {
 	BaseURL  string
@@ -26,7 +32,10 @@ func NewClient(baseURL, apiKey, username, password string) *Client {
 		APIKey:   apiKey,
 		Username: username,
 		Password: password,
-		HTTP:     &http.Client{Jar: jar},
+		HTTP: &http.Client{
+			Jar:     jar,
+			Timeout: 15 * time.Second,
+		},
 	}
 }
 
@@ -141,4 +150,155 @@ func (c *Client) listInboundsAt(ctx context.Context, endpoint string) ([]Inbound
 	}
 
 	return nil, "", fmt.Errorf("xui list inbounds at %s returned empty payload", endpoint)
+}
+
+// AddClient adds one or more clients to an inbound.
+// settings is the JSON-encoded settings.clients array.
+func (c *Client) AddClient(ctx context.Context, inboundID int, settings string) error {
+	endpoint, err := c.joinURL("/panel/api/inbounds/addClient")
+	if err != nil {
+		return err
+	}
+
+	// The 3x-ui API expects settings as a JSON-encoded string value,
+	// not a raw JSON object. json.Marshal does the proper escaping.
+	settingsEncoded, _ := json.Marshal(settings)
+	body := fmt.Sprintf(`{"id":%d,"settings":%s}`, inboundID, string(settingsEncoded))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.Do(ctx, req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("add client: %s", resp.Status)
+	}
+	// 3x-ui returns HTTP 200 even on failure, check body
+	var apiResp apiResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err == nil {
+		if !apiResp.Success {
+			return fmt.Errorf("add client rejected: %s", apiResp.Msg)
+		}
+	}
+	return nil
+}
+
+// UpdateClient updates a single client's configuration.
+// clientID is the UUID/password of the client to update.
+// settings is the JSON-encoded inbound settings with updated client.
+func (c *Client) UpdateClient(ctx context.Context, clientID string, inboundID int, settings string) error {
+	endpoint, err := c.joinURL("/panel/api/inbounds/updateClient/" + clientID)
+	if err != nil {
+		return err
+	}
+
+	settingsEncoded, _ := json.Marshal(settings)
+	body := fmt.Sprintf(`{"id":%d,"settings":%s}`, inboundID, string(settingsEncoded))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.Do(ctx, req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("update client: %s", resp.Status)
+	}
+	var apiResp apiResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err == nil {
+		if !apiResp.Success {
+			return fmt.Errorf("update client rejected: %s", apiResp.Msg)
+		}
+	}
+	return nil
+}
+
+// DeleteClient removes a client from an inbound by its UUID/password.
+func (c *Client) DeleteClient(ctx context.Context, inboundID int, clientID string) error {
+	endpoint, err := c.joinURL(fmt.Sprintf("/panel/api/inbounds/%d/delClient/%s", inboundID, clientID))
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.Do(ctx, req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("delete client: %s", resp.Status)
+	}
+	var apiResp apiResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err == nil {
+		if !apiResp.Success {
+			return fmt.Errorf("delete client rejected: %s", apiResp.Msg)
+		}
+	}
+	return nil
+}
+
+// DeleteClientByEmail removes a client from an inbound by email.
+func (c *Client) DeleteClientByEmail(ctx context.Context, inboundID int, email string) error {
+	endpoint, err := c.joinURL(fmt.Sprintf("/panel/api/inbounds/%d/delClientByEmail/%s", inboundID, url.PathEscape(email)))
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.Do(ctx, req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("delete client by email: %s", resp.Status)
+	}
+	return nil
+}
+
+// RestartXray triggers a Xray restart on the panel.
+func (c *Client) RestartXray(ctx context.Context) error {
+	endpoint, err := c.joinURL("/panel/api/server/restartXrayService")
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.Do(ctx, req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// 202 Accepted is also valid here
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		return fmt.Errorf("restart xray: %s", resp.Status)
+	}
+	return nil
 }

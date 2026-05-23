@@ -6,7 +6,7 @@
   "config_dir": ".",
   "frontend_dir": "../web",
   "xui": {
-    "base_url": "https://www.test.com/xui",
-    "api_key": "test-api-key"
+    "base_url": "",
+    "api_key": ""
   }
 }

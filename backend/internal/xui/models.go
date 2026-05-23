@@ -70,20 +70,28 @@ type inboundListResponse struct {
 	RawData json.RawMessage `json:"data"`
 }
 
+type ClientTraffic struct {
+	Email string `json:"email"`
+	Up    int64  `json:"up"`
+	Down  int64  `json:"down"`
+	Total int64  `json:"total"`
+}
+
 type InboundRecord struct {
-	ID             int64  `json:"id"`
-	Up             int64  `json:"up"`
-	Down           int64  `json:"down"`
-	Total          int64  `json:"total"`
-	Remark         string `json:"remark"`
-	Enable         bool   `json:"enable"`
-	ExpiryTime     int64  `json:"expiryTime"`
-	Listen         string `json:"listen"`
-	Port           int    `json:"port"`
-	Protocol       string `json:"protocol"`
-	Settings       string `json:"settings"`
-	StreamSettings string `json:"streamSettings"`
-	Sniffing       string `json:"sniffing"`
+	ID             int64            `json:"id"`
+	Up             int64            `json:"up"`
+	Down           int64            `json:"down"`
+	Total          int64            `json:"total"`
+	Remark         string           `json:"remark"`
+	Enable         bool             `json:"enable"`
+	ExpiryTime     int64            `json:"expiryTime"`
+	Listen         string           `json:"listen"`
+	Port           int              `json:"port"`
+	Protocol       string           `json:"protocol"`
+	Settings       string           `json:"settings"`
+	StreamSettings string           `json:"streamSettings"`
+	Sniffing       string           `json:"sniffing"`
+	ClientStats    []ClientTraffic  `json:"clientStats,omitempty"`
 }
 
 type inboundSettings struct {
@@ -91,14 +99,17 @@ type inboundSettings struct {
 }
 
 type InboundClient struct {
-	Email    string `json:"email"`
-	ID       string `json:"id"`
-	Password string `json:"password"`
-	Flow     string `json:"flow"`
-	Enable   bool   `json:"enable"`
+	Email      string `json:"email"`
+	ID         string `json:"id"`
+	Password   string `json:"password,omitempty"`
+	Flow       string `json:"flow,omitempty"`
+	LimitIP    int    `json:"limitIp"`
+	TotalGB    int64  `json:"totalGB"`
+	ExpiryTime int64  `json:"expiryTime"`
+	Enable     bool   `json:"enable"`
 }
 
-type inboundStreamSettings struct {
+type InboundStreamSettings struct {
 	Network         string          `json:"network"`
 	Security        string          `json:"security"`
 	ALPN            []string        `json:"alpn"`

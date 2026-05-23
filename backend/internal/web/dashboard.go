@@ -8,7 +8,7 @@ import (
 type dashboardSummary struct {
 	Mode        string `json:"mode"`
 	Service     string `json:"service"`
-	XUIStatus   string `json:"xui_status"`
+	ServerCount int    `json:"server_count"`
 	UniqueUsers int    `json:"unique_users"`
 	NodeCount   int    `json:"node_count"`
 }
@@ -25,20 +25,34 @@ func registerDashboardRoutes(mux *http.ServeMux, deps Dependencies) {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
-		xuiStatus, err := deps.XUIService.TestConnection(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
+
+		serverCount := 0
+		if deps.DBService != nil {
+			if servers, err := deps.DBService.DBListServers(); err == nil {
+				serverCount = len(servers)
+			}
 		}
-		users, err := deps.UserService.SearchUsers("")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
+
+		uniqueUsers := 0
+		if deps.DBService != nil {
+			if users, err := deps.DBService.DBUserList(); err == nil {
+				uniqueUsers = len(users)
+			}
+		} else {
+			if users, err := deps.UserService.SearchUsers(""); err == nil {
+				uniqueUsers = len(users)
+			}
 		}
-		nodes, err := deps.ConfigService.ReadManagedNodes()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
+
+		nodeCount := 0
+		if deps.DBService != nil {
+			if nodes, err := deps.DBService.DBListNodeDB(); err == nil {
+				nodeCount = len(nodes)
+			}
+		} else {
+			if nodes, err := deps.ConfigService.ReadManagedNodes(); err == nil {
+				nodeCount = len(nodes)
+			}
 		}
 
 		modeLabel := "默认直连"
@@ -49,9 +63,9 @@ func registerDashboardRoutes(mux *http.ServeMux, deps Dependencies) {
 		summary := dashboardSummary{
 			Mode:        modeLabel,
 			Service:     "ok",
-			XUIStatus:   map[bool]string{true: "connected", false: "failed"}[xuiStatus.OK],
-			UniqueUsers: len(users),
-			NodeCount:   len(nodes),
+			ServerCount: serverCount,
+			UniqueUsers: uniqueUsers,
+			NodeCount:   nodeCount,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

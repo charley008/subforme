@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"subforme/backend/internal/config"
+	"subforme/backend/internal/db"
 )
 
 type userModeRequest struct {
@@ -18,20 +19,21 @@ type userModeRequest struct {
 }
 
 type userSummaryResponse struct {
-	Email             string              `json:"email"`
-	Remark            string              `json:"remark"`
-	Protocol          string              `json:"protocol"`
-	NodeCount         int                 `json:"node_count"`
-	Server            string              `json:"server"`
-	Port              int                 `json:"port"`
-	LastRemark        string              `json:"last_remark,omitempty"`
-	Mode              string              `json:"mode"`
-	ShareURL          string              `json:"share_url"`
-	SelectedNodes     []string            `json:"selected_nodes,omitempty"`
-	SelectedProviders []string            `json:"selected_providers,omitempty"`
-	GroupNodes        map[string][]string `json:"group_nodes,omitempty"`
-	UUID              string              `json:"uuid,omitempty"`
-	Password          string              `json:"password,omitempty"`
+	Email             string               `json:"email"`
+	Remark            string               `json:"remark"`
+	Protocol          string               `json:"protocol"`
+	NodeCount         int                  `json:"node_count"`
+	Server            string               `json:"server"`
+	Port              int                  `json:"port"`
+	LastRemark        string               `json:"last_remark,omitempty"`
+	Mode              string               `json:"mode"`
+	ShareURL          string               `json:"share_url"`
+	SelectedNodes     []string             `json:"selected_nodes,omitempty"`
+	SelectedProviders []string             `json:"selected_providers,omitempty"`
+	GroupNodes        map[string][]string  `json:"group_nodes,omitempty"`
+	UUID              string               `json:"uuid,omitempty"`
+	Password          string               `json:"password,omitempty"`
+	ServerTraffic     []db.ServerTraffic   `json:"server_traffic,omitempty"`
 }
 
 func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
@@ -78,9 +80,44 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 		query := r.URL.Query().Get("q")
+
+		// Try DB first if available (new system)
+		if deps.DBService != nil {
+			dbUsers, err := deps.DBService.DBUserSearch(query)
+			if err == nil {
+				ac, _ := deps.ConfigService.ReadAppConfig()
+				out := make([]userSummaryResponse, 0, len(dbUsers))
+				for _, u := range dbUsers {
+					mode := resolveUserMode(ac, u.Email)
+					protocols, nodeCount := deps.DBService.DBGetUserProtocols(u.ID)
+					shareURL := shareURLForRequest(r, u.Email)
+					traffic := deps.DBService.DBGetUserTraffic(u.ID)
+					out = append(out, userSummaryResponse{
+						Email:             u.Email,
+						Protocol:          protocols,
+						Remark:            u.Remark,
+						Mode:              mode,
+						UUID:              u.UUID,
+						NodeCount:         nodeCount,
+						ShareURL:          shareURL,
+						SelectedNodes:     ac.UserNodes[u.Email],
+						SelectedProviders: ac.UserProviders[u.Email],
+						GroupNodes:        ac.UserGroupNodes[u.Email],
+						ServerTraffic:     traffic,
+					})
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(out)
+				return
+			}
+		}
+
+		// Fallback to old xui-based search
 		users, err := deps.UserService.SearchUsers(query)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			// Return empty rather than 502
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]userSummaryResponse{})
 			return
 		}
 		appConfig, err := deps.ConfigService.ReadAppConfig()

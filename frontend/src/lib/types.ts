@@ -70,6 +70,7 @@ export type UserSummary = {
   group_nodes?: Record<string, string[]>;
   uuid?: string;
   password?: string;
+  server_traffic?: { server_name: string; up: number; down: number }[];
 };
 
 export type ManagedNode = {
@@ -77,6 +78,7 @@ export type ManagedNode = {
   name: string;
   address: string;
   port?: number;
+  server_id?: number;
 };
 
 export type AvailableNode = {
@@ -114,7 +116,7 @@ export type NodePreview = {
 export type DashboardSummary = {
   mode: string;
   service: string;
-  xui_status: string;
+  server_count: number;
   unique_users: number;
   node_count: number;
 };

@@ -207,12 +207,58 @@ func parseInboundSettings(raw string) (inboundSettings, bool) {
 	return settings, true
 }
 
-func parseStreamSettings(raw string) inboundStreamSettings {
-	stream := inboundStreamSettings{}
+// ParseInboundSettings is the exported version of parseInboundSettings.
+func ParseInboundSettings(raw string) (inboundSettings, bool) {
+	return parseInboundSettings(raw)
+}
+
+// ClientParams holds the fields needed to create/update a client on a 3x-ui inbound.
+type ClientParams struct {
+	Email      string
+	UUID       string
+	Password   string
+	Flow       string
+	TotalGB    int64
+	ExpiryTime int64
+	LimitIP    int
+	Enable     bool
+}
+
+// BuildClientConfig creates an InboundClient from ClientParams for the given protocol.
+func BuildClientConfig(protocol string, p ClientParams) InboundClient {
+	c := InboundClient{
+		Email:      p.Email,
+		Enable:     p.Enable,
+		TotalGB:    p.TotalGB,
+		ExpiryTime: p.ExpiryTime,
+		LimitIP:    p.LimitIP,
+	}
+	switch protocol {
+	case "vless", "vmess":
+		c.ID = p.UUID
+		c.Flow = p.Flow
+	case "trojan":
+		c.Password = p.Password
+	case "shadowsocks":
+		c.Password = p.Password
+	case "hysteria2", "hysteria":
+		c.Password = p.Password
+	default:
+		c.ID = p.UUID
+	}
+	return c
+}
+
+func parseStreamSettings(raw string) InboundStreamSettings {
+	stream := InboundStreamSettings{}
 	if raw != "" {
 		_ = json.Unmarshal([]byte(raw), &stream)
 	}
 	return stream
+}
+
+func ParseStreamSettings(raw string) InboundStreamSettings {
+	return parseStreamSettings(raw)
 }
 
 func collectNodes(inbounds []InboundRecord, host string, include func(client InboundClient, inbound InboundRecord) bool) []Node {
@@ -263,7 +309,7 @@ func buildNodeID(protocol, remark, server string, port int) string {
 	return fmt.Sprintf("%s|%s|%s|%d", protocol, firstNonEmpty(remark, protocol), server, port)
 }
 
-func pickServerName(stream inboundStreamSettings) string {
+func pickServerName(stream InboundStreamSettings) string {
 	if stream.RealitySettings.Settings.ServerName != "" {
 		return stream.RealitySettings.Settings.ServerName
 	}
@@ -276,7 +322,7 @@ func pickServerName(stream inboundStreamSettings) string {
 	return ""
 }
 
-func pickALPN(stream inboundStreamSettings) []string {
+func pickALPN(stream InboundStreamSettings) []string {
 	if len(stream.ALPN) > 0 {
 		return stream.ALPN
 	}
@@ -286,7 +332,7 @@ func pickALPN(stream inboundStreamSettings) []string {
 	return nil
 }
 
-func pickEncryption(protocol string, stream inboundStreamSettings) string {
+func pickEncryption(protocol string, stream InboundStreamSettings) string {
 	if protocol == "vless" && stream.Network == "xhttp" {
 		return ""
 	}

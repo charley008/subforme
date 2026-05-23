@@ -8,6 +8,7 @@ const navItems = [
   { to: "/settings", label: "设置", icon: "⚙️" },
   { to: "/users", label: "用户", icon: "👥" },
   { to: "/nodes", label: "节点", icon: "🖥️" },
+  { to: "/servers", label: "服务器", icon: "🌐" },
   { to: "/groups", label: "代理分组", icon: "🔀" },
   { to: "/templates", label: "模板", icon: "📄" },
 ];

@@ -31,9 +31,9 @@ export function DashboardPage() {
           </span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">3x-ui 状态</span>
-          <span className={`stat-value ${summary?.xui_status === "connected" ? "success" : "warning"}`}>
-            {summary?.xui_status ?? "-"}
+          <span className="stat-label">服务器</span>
+          <span className="stat-value">
+            {summary?.server_count != null ? `${summary.server_count} 台` : "-"}
           </span>
         </div>
         <div className="stat-card">

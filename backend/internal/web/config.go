@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"subforme/backend/internal/config"
+	"subforme/backend/internal/db"
 )
 
 func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
@@ -141,30 +142,36 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 	}))
 
 	mux.HandleFunc("/api/nodes", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
-		if deps.ConfigService == nil {
-			http.Error(w, "config service unavailable", http.StatusNotImplemented)
+		if deps.DBService == nil {
+			http.Error(w, "db service unavailable", http.StatusNotImplemented)
 			return
 		}
 		switch r.Method {
 		case http.MethodGet:
-			nodes, err := deps.ConfigService.ReadManagedNodes()
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadGateway)
+			// Try DB first, fallback to YAML
+			dbNodes, err := deps.DBService.DBListNodeDB()
+			if err == nil && len(dbNodes) > 0 {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(dbNodes)
 				return
 			}
+			ymlNodes, _ := deps.ConfigService.ReadManagedNodes()
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(nodes)
-		case http.MethodPut:
-			var next []config.ManagedNode
+			_ = json.NewEncoder(w).Encode(ymlNodes)
+		case http.MethodPut, http.MethodPost:
+			var next []db.Node2
 			if err := json.NewDecoder(r.Body).Decode(&next); err != nil {
 				http.Error(w, "invalid json", http.StatusBadRequest)
 				return
 			}
-			if err := deps.ConfigService.UpdateManagedNodes(next); err != nil {
+			if err := deps.DBService.DBReplaceNodes(next); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			w.WriteHeader(http.StatusNoContent)
+			// Return saved nodes with generated IDs
+			saved, _ := deps.DBService.DBListNodeDB()
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(saved)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

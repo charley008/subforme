@@ -8,6 +8,7 @@ import (
 
 	"subforme/backend/internal/app"
 	"subforme/backend/internal/config"
+	"subforme/backend/internal/db"
 	"subforme/backend/internal/web"
 )
 
@@ -25,7 +26,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	service := app.NewService(runtimeConfig.ConfigDir, runtimeConfig.XUI)
+	store, err := db.Open(runtimeConfig.ConfigDir)
+	if err != nil {
+		log.Fatalf("open database: %v", err)
+	}
+	defer store.Close()
+
+	service := app.NewServiceWithDB(runtimeConfig.ConfigDir, runtimeConfig.XUI, store)
 
 	authSvc := &app.StaticAuthService{
 		Username: runtimeConfig.AdminUsername,
@@ -37,6 +44,7 @@ func main() {
 		ConfigService:       service,
 		XUIService:          service,
 		UserService:         service,
+		DBService:           service,
 		SessionSecret:       runtimeConfig.SessionSecret,
 		FrontendDir:         runtimeConfig.FrontendDir,
 		AdminUsername:       runtimeConfig.AdminUsername,

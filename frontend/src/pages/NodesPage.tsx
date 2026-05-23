@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
-import { getJSON, putJSON } from "../lib/api";
+import { getJSON, postJSON } from "../lib/api";
 import type { ManagedNode } from "../lib/types";
+
+type Server = {
+  id: number;
+  name: string;
+  host: string;
+};
 
 const emptyDraft: ManagedNode = {
   id: "",
@@ -11,13 +17,14 @@ const emptyDraft: ManagedNode = {
 
 export function NodesPage() {
   const [nodes, setNodes] = useState<ManagedNode[]>([]);
+  const [servers, setServers] = useState<Server[]>([]);
   const [draft, setDraft] = useState<ManagedNode>(emptyDraft);
   const [editingID, setEditingID] = useState<string | null>(null);
   const [message, setMessage] = useState("节点代表一台 VPS 机器，你手动添加维护。");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    void loadNodes();
+    void Promise.all([loadNodes(), loadServers()]);
   }, []);
 
   async function loadNodes() {
@@ -30,11 +37,20 @@ export function NodesPage() {
     }
   }
 
+  async function loadServers() {
+    try {
+      const data = await getJSON<Server[]>("/api/servers");
+      setServers(data);
+    } catch {
+      // non-critical
+    }
+  }
+
   async function saveNodes(nextNodes: ManagedNode[], successMessage: string) {
     setSaving(true);
     try {
-      await putJSON("/api/nodes", nextNodes);
-      setNodes(nextNodes);
+      const saved = await postJSON<ManagedNode[]>("/api/nodes", nextNodes);
+      setNodes(saved);
       setMessage(successMessage);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存节点失败");
@@ -68,11 +84,14 @@ export function NodesPage() {
       name: draft.name.trim(),
       address: draft.address.trim(),
       port: draft.port || 443,
+      server_id: draft.server_id,
     };
     const nextNodes = editingID ? nodes.map((n) => (n.id === editingID ? nextNode : n)) : [...nodes, nextNode];
     void saveNodes(nextNodes, editingID ? "节点已修改。" : "节点已添加。");
     resetDraft();
   }
+
+  const serverMap = new Map(servers.map((s) => [s.id, s.name]));
 
   return (
     <div className="page">
@@ -90,18 +109,20 @@ export function NodesPage() {
               <th>名称</th>
               <th>地址</th>
               <th>端口</th>
+              <th>所属服务器</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             {nodes.length === 0 ? (
-              <tr><td colSpan={4}><div className="empty-state">暂无节点，请添加。</div></td></tr>
+              <tr><td colSpan={5}><div className="empty-state">暂无节点，请添加。</div></td></tr>
             ) : null}
             {nodes.map((node) => (
               <tr key={node.id}>
                 <td><strong>{node.name}</strong></td>
                 <td style={{ fontFamily: "monospace" }}>{node.address}</td>
                 <td>{node.port || 443}</td>
+                <td style={{ fontSize: 13, color: "#64748b" }}>{serverMap.get(node.server_id ?? 0) || "-"}</td>
                 <td>
                   <div className="btn-group">
                     <button type="button" className="btn btn-sm" onClick={() => handleEdit(node)}>修改</button>
@@ -134,6 +155,15 @@ export function NodesPage() {
           <div className="form-group">
             <label>端口</label>
             <input type="number" value={draft.port ? String(draft.port) : ""} placeholder="443" onChange={(e) => setDraft((c) => ({ ...c, port: Number(e.target.value) || 0 }))} />
+          </div>
+          <div className="form-group">
+            <label>所属服务器</label>
+            <select value={draft.server_id ?? ""} onChange={(e) => setDraft((c) => ({ ...c, server_id: e.target.value ? Number(e.target.value) : undefined }))}>
+              <option value="">-- 不关联 --</option>
+              {servers.map((sv) => (
+                <option key={sv.id} value={sv.id}>{sv.name} ({sv.host})</option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="form-footer">

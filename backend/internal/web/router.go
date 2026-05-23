@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"subforme/backend/internal/app"
 	"subforme/backend/internal/config"
+	"subforme/backend/internal/db"
 	"subforme/backend/internal/xui"
 )
 
@@ -42,6 +44,26 @@ type UserService interface {
 	PreviewUser(query string) ([]xui.Node, error)
 }
 
+type DBService interface {
+	DBUserSearch(query string) ([]db.User, error)
+	DBUserList() ([]db.User, error)
+	DBCreateUser(u *db.User) error
+	DBUpdateUser(u *db.User) error
+	DBDeleteUser(id int64) error
+	DBGetUserProtocols(userID int64) (string, int)
+	DBGetUserTraffic(userID int64) []db.ServerTraffic
+	RefreshTraffic(ctx context.Context) map[string][]db.ServerTraffic
+	LoadTraffic(ctx context.Context) map[string][]db.ServerTraffic
+	ImportFromServer(ctx context.Context, serverID int64) (*app.ImportResult, error)
+	SyncToServers(ctx context.Context) (*app.SyncResult, error)
+	DBListServers() ([]db.Server, error)
+	DBCreateServer(sv *db.Server) error
+	DBUpdateServer(sv *db.Server) error
+	DBDeleteServer(id int64) error
+	DBListNodeDB() ([]db.Node2, error)
+	DBReplaceNodes(nodes []db.Node2) error
+}
+
 type Dependencies struct {
 	SubscriptionService SubscriptionService
 	AuthService         AuthService
@@ -50,6 +72,7 @@ type Dependencies struct {
 	ConfigService       ConfigService
 	XUIService          XUIService
 	UserService         UserService
+	DBService           DBService
 	AdminUsername       string
 	RuntimePath         string
 }
@@ -70,6 +93,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	registerDashboardRoutes(mux, deps)
 	registerConfigRoutes(mux, deps)
 	registerPreviewRoutes(mux, deps)
+	registerDBRoutes(mux, deps)
 
 	return mux
 }
