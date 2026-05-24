@@ -149,16 +149,13 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 		switch r.Method {
 		case http.MethodGet:
-			// Try DB first, fallback to YAML
 			dbNodes, err := deps.DBService.DBListNodeDB()
-			if err == nil && len(dbNodes) > 0 {
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(dbNodes)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
 				return
 			}
-			ymlNodes, _ := deps.ConfigService.ReadManagedNodes()
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(ymlNodes)
+			_ = json.NewEncoder(w).Encode(dbNodes)
 		case http.MethodPut, http.MethodPost:
 			var next []db.Node2
 			if err := json.NewDecoder(r.Body).Decode(&next); err != nil {

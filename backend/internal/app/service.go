@@ -79,7 +79,7 @@ func (s Service) Generate(user string) ([]byte, error) {
 	}
 
 	mode := s.resolveMode(bundle.App, user)
-	providers, err := config.LoadProviders(s.ConfigDir)
+	providers, err := s.ReadProviders()
 	if err != nil {
 		return nil, fmt.Errorf("load providers: %w", err)
 	}
@@ -123,6 +123,9 @@ func (s Service) UpdateAppConfig(next config.AppConfig) error {
 	if s.Loader == nil {
 		return fmt.Errorf("config loader is not configured")
 	}
+	if s.DB != nil {
+		return s.DB.SaveAppConfigToDB(next)
+	}
 	return config.SaveAppConfig(s.ConfigDir, next)
 }
 
@@ -135,6 +138,12 @@ func (s Service) ReadGroupsConfig() (config.GroupConfig, error) {
 }
 
 func (s Service) UpdateGroupsConfig(next config.GroupConfig) error {
+	if s.DB != nil {
+		if err := s.DB.SaveGroupsConfigToDB(next); err != nil {
+			return err
+		}
+		return s.DB.CleanupGroupPrefs(groupConfigNames(next))
+	}
 	if err := config.SaveGroupsConfig(s.ConfigDir, next); err != nil {
 		return err
 	}
@@ -178,7 +187,7 @@ func (s Service) PreviewUser(query string) ([]xui.Node, error) {
 func (s Service) loadManagedNodes() []config.ManagedNode {
 	if s.DB != nil {
 		dbNodes, err := s.DB.ListNodeDB()
-		if err == nil && len(dbNodes) > 0 {
+		if err == nil {
 			out := make([]config.ManagedNode, len(dbNodes))
 			for i, n := range dbNodes {
 				out[i] = config.ManagedNode{
@@ -277,22 +286,82 @@ func mainProxyGroupName(cfg config.GroupConfig, groupList []groups.ProxyGroup) s
 }
 
 func (s Service) ReadManagedNodes() ([]config.ManagedNode, error) {
+	if s.DB != nil {
+		dbNodes, err := s.DB.ListNodeDB()
+		if err == nil {
+			out := make([]config.ManagedNode, len(dbNodes))
+			for i, n := range dbNodes {
+				out[i] = config.ManagedNode{ID: n.NodeID, Name: n.Name, Address: n.Address, Port: n.Port, ServerID: n.ServerID}
+			}
+			return out, nil
+		}
+	}
 	return config.LoadManagedNodes(s.ConfigDir)
 }
 
 func (s Service) UpdateManagedNodes(next []config.ManagedNode) error {
+	if s.DB != nil {
+		dbNodes := make([]db.Node2, len(next))
+		validIDs := make([]string, 0, len(next))
+		for i, n := range next {
+			dbNodes[i] = db.Node2{NodeID: n.ID, Name: n.Name, Address: n.Address, Port: n.Port, ServerID: n.ServerID}
+			validIDs = append(validIDs, n.ID)
+		}
+		if err := s.DB.ReplaceNodes(dbNodes); err != nil {
+			return err
+		}
+		return s.DB.CleanupNodePrefs(validIDs)
+	}
 	return config.SaveManagedNodes(s.ConfigDir, next)
 }
 
 func (s Service) ReadProviders() ([]config.ProviderAddon, error) {
+	if s.DB != nil {
+		if providers, _, err := s.DB.LoadProvidersFromDB(); err != nil {
+			return nil, err
+		} else {
+			return providers, nil
+		}
+	}
 	return config.LoadProviders(s.ConfigDir)
 }
 
 func (s Service) UpsertProvider(provider config.ProviderAddon, publicBaseURL string) (config.ProviderAddon, error) {
+	if s.DB != nil {
+		providers, _, err := s.DB.LoadProvidersFromDB()
+		if err != nil {
+			return config.ProviderAddon{}, err
+		}
+		var existing *config.ProviderAddon
+		for i := range providers {
+			if providers[i].ID == provider.ID {
+				existing = &providers[i]
+				break
+			}
+		}
+		saved, err := config.PrepareProvider(provider, publicBaseURL, existing)
+		if err != nil {
+			return config.ProviderAddon{}, err
+		}
+		if err := s.DB.UpsertProviderToDB(saved); err != nil {
+			return config.ProviderAddon{}, err
+		}
+		return saved, nil
+	}
 	return config.UpsertProvider(s.ConfigDir, provider, publicBaseURL)
 }
 
 func (s Service) DeleteProvider(id string) error {
+	if s.DB != nil {
+		if err := s.DB.DeleteProviderFromDB(id); err != nil {
+			return err
+		}
+		if err := s.DB.CleanupProviderPrefs(id); err != nil {
+			return err
+		}
+		_ = config.RemoveProviderFile(s.ConfigDir, id)
+		return nil
+	}
 	if err := config.DeleteProvider(s.ConfigDir, id); err != nil {
 		return err
 	}
@@ -300,6 +369,26 @@ func (s Service) DeleteProvider(id string) error {
 }
 
 func (s Service) RefreshProvider(id string) (config.ProviderRefreshResult, error) {
+	if s.DB != nil {
+		providers, _, err := s.DB.LoadProvidersFromDB()
+		if err != nil {
+			return config.ProviderRefreshResult{}, err
+		}
+		for _, provider := range providers {
+			if provider.ID != id {
+				continue
+			}
+			updated, result, refreshErr := config.RefreshProviderAddon(s.ConfigDir, provider)
+			_ = s.DB.UpsertProviderToDB(updated)
+			if refreshErr != nil {
+				log.Printf("[provider] refresh %s failed: %v", id, refreshErr)
+				return result, refreshErr
+			}
+			log.Printf("[provider] refresh %s ok: %d proxies", id, result.Count)
+			return result, nil
+		}
+		return config.ProviderRefreshResult{}, fmt.Errorf("provider %q not found", id)
+	}
 	result, err := config.RefreshProvider(s.ConfigDir, id)
 	if err != nil {
 		log.Printf("[provider] refresh %s failed: %v", id, err)
@@ -317,16 +406,46 @@ func (s Service) StartProviderUpdater(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
-		config.RefreshDueProviders(s.ConfigDir)
+		s.refreshDueProviders(ctx)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				config.RefreshDueProviders(s.ConfigDir)
+				s.refreshDueProviders(ctx)
 			}
 		}
 	}()
+}
+
+func (s Service) refreshDueProviders(ctx context.Context) {
+	if s.DB == nil {
+		config.RefreshDueProviders(s.ConfigDir)
+		return
+	}
+	providers, err := s.ReadProviders()
+	if err != nil {
+		return
+	}
+	now := time.Now().Unix()
+	for _, provider := range providers {
+		if provider.SourceURL == "" {
+			continue
+		}
+		interval := provider.UpdateIntervalSeconds
+		if interval <= 0 {
+			interval = 3600
+		}
+		if provider.LastUpdatedAt > 0 && now-provider.LastUpdatedAt < int64(interval) {
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			_, _ = s.RefreshProvider(provider.ID)
+		}
+	}
 }
 
 func (s Service) DetectAvailableNodes() ([]xui.AvailableNode, error) {
@@ -338,16 +457,10 @@ func (s Service) DetectAvailableNodes() ([]xui.AvailableNode, error) {
 }
 
 func (s Service) ReadTemplateSectionYAML(section string) (string, error) {
-	if section == "providers" {
-		return config.LoadProvidersYAML(s.ConfigDir)
-	}
 	return config.LoadTemplateSectionYAML(s.ConfigDir, section)
 }
 
 func (s Service) UpdateTemplateSectionYAML(section, raw string) error {
-	if section == "providers" {
-		return config.SaveProvidersYAML(s.ConfigDir, raw)
-	}
 	return config.SaveTemplateSectionYAML(s.ConfigDir, section, raw)
 }
 
@@ -363,12 +476,40 @@ func (s Service) loadBundle() (config.Bundle, error) {
 	if s.Loader == nil {
 		return config.Bundle{}, fmt.Errorf("config loader is not configured")
 	}
+	if s.DB != nil {
+		var bundle config.Bundle
+		appCfg, _, err := s.DB.LoadAppConfigFromDB(defaultAppConfig())
+		if err != nil {
+			return config.Bundle{}, err
+		}
+		groupCfg, _, err := s.DB.LoadGroupsConfigFromDB()
+		if err != nil {
+			return config.Bundle{}, err
+		}
+		bundle.App = appCfg
+		bundle.Groups = groupCfg
+		bundle.App.XUI = s.mergeXUI(bundle.App.XUI)
+		return bundle, nil
+	}
 	bundle, err := s.Loader(s.ConfigDir)
 	if err != nil {
 		return config.Bundle{}, fmt.Errorf("load config bundle: %w", err)
 	}
 	bundle.App.XUI = s.mergeXUI(bundle.App.XUI)
 	return bundle, nil
+}
+
+func defaultAppConfig() config.AppConfig {
+	return config.AppConfig{
+		Mode:                       "whitelist",
+		CacheTTLSeconds:            60,
+		HealthcheckURL:             "https://www.gstatic.com/generate_204",
+		HealthcheckIntervalSeconds: 300,
+		UserModes:                  map[string]string{},
+		UserNodes:                  map[string][]string{},
+		UserProviders:              map[string][]string{},
+		UserGroupNodes:             map[string]map[string][]string{},
+	}
 }
 
 func (s Service) resolver(appConfig config.AppConfig) XUIResolver {
@@ -546,7 +687,7 @@ func (s Service) DBDeleteUser(id int64) error {
 	if err := s.DB.DeleteUser(id); err != nil {
 		return err
 	}
-	return s.cleanupAppConfig()
+	return nil
 }
 
 func (s Service) DBListServers() ([]db.Server, error) {
@@ -561,21 +702,11 @@ func (s Service) DBReplaceNodes(nodes []db.Node2) error {
 	if err := s.DB.ReplaceNodes(nodes); err != nil {
 		return err
 	}
-	// Also save to YAML for compatibility
-	ymlNodes := make([]config.ManagedNode, len(nodes))
-	for i, n := range nodes {
-		ymlNodes[i] = config.ManagedNode{
-			ID:       n.NodeID,
-			Name:     n.Name,
-			Address:  n.Address,
-			Port:     n.Port,
-			ServerID: n.ServerID,
-		}
+	validIDs := make([]string, 0, len(nodes))
+	for _, n := range nodes {
+		validIDs = append(validIDs, n.NodeID)
 	}
-	if err := config.SaveManagedNodes(s.ConfigDir, ymlNodes); err != nil {
-		return err
-	}
-	return s.cleanupAppConfig()
+	return s.DB.CleanupNodePrefs(validIDs)
 }
 
 func (s Service) DBCreateServer(sv *db.Server) error {
@@ -767,9 +898,7 @@ func (s Service) ImportFromServer(ctx context.Context, serverID int64) (*ImportR
 		removed = append(removed, email)
 	}
 	if len(removed) > 0 {
-		if err := s.cleanupAppConfig(); err != nil {
-			log.Printf("[import] cleanup app config failed: %v", err)
-		}
+		log.Printf("[import] removed %d users from local database", len(removed))
 	}
 
 	log.Printf("[import] done: %d new, %d updated, %d removed", imported, updated, len(removed))

@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 type Store struct {
 	DB *sql.DB
@@ -67,6 +67,7 @@ func (s *Store) migrate() error {
 		{version: 2, run: s.migrateV2},
 		{version: 3, run: s.migrateV3},
 		{version: 4, run: s.migrateV4},
+		{version: 5, run: s.migrateV5},
 	}
 
 	for _, migration := range migrations {
@@ -81,6 +82,54 @@ func (s *Store) migrate() error {
 	}
 
 	return nil
+}
+
+func (s *Store) migrateV5() error {
+	statements := []string{
+		`ALTER TABLE users ADD COLUMN mode TEXT DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN node_ids_json TEXT DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN provider_ids_json TEXT DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN group_nodes_json TEXT DEFAULT ''`,
+		`CREATE TABLE IF NOT EXISTS app_settings (
+			key        TEXT PRIMARY KEY,
+			value      TEXT NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS proxy_groups (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			name       TEXT NOT NULL UNIQUE,
+			type       TEXT NOT NULL,
+			url        TEXT DEFAULT '',
+			interval   INTEGER DEFAULT 0,
+			provider   TEXT DEFAULT '',
+			sort_order INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS provider_addons (
+			id                      TEXT PRIMARY KEY,
+			name                    TEXT NOT NULL,
+			source_url              TEXT DEFAULT '',
+			update_interval_seconds INTEGER DEFAULT 0,
+			insecure_skip_verify    INTEGER DEFAULT 0,
+			last_updated_at         INTEGER DEFAULT 0,
+			last_error              TEXT DEFAULT '',
+			proxy_count             INTEGER DEFAULT 0,
+			proxy_providers_json    TEXT NOT NULL DEFAULT '{}',
+			proxy_groups_json       TEXT NOT NULL DEFAULT '[]',
+			updated_at              INTEGER NOT NULL
+		)`,
+	}
+	for _, stmt := range statements {
+		if _, err := s.DB.Exec(stmt); err != nil {
+			// SQLite cannot add an existing column; keep migrations idempotent for
+			// databases that were partially upgraded by a previous build.
+			if len(stmt) >= 11 && stmt[:11] == "ALTER TABLE" {
+				continue
+			}
+			return fmt.Errorf("exec migration: %w\nStatement: %s", err, stmt)
+		}
+	}
+	_, err := s.DB.Exec("INSERT INTO schema_version (version, applied_at) VALUES (5, ?)", time.Now().Unix())
+	return err
 }
 
 func (s *Store) migrateV4() error {

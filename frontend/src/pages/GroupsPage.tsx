@@ -18,6 +18,10 @@ const typeOptions = [
   { value: "pass", label: "pass（透传）" },
 ];
 
+const defaultTestURL = "https://www.gstatic.com/generate_204";
+const defaultInterval = 300;
+const testGroupTypes = new Set(["url-test", "load-balance", "fallback"]);
+
 export function GroupsPage() {
   const [groups, setGroups] = useState<GroupDef[]>([]);
   const [message, setMessage] = useState("");
@@ -39,11 +43,12 @@ export function GroupsPage() {
     }
   }
 
-  async function saveGroups() {
+  async function persistGroups(nextGroups: GroupDef[], successMessage: string) {
     setSaving(true);
     try {
-      await putJSON("/api/config/groups", { groups });
-      setMessage("代理分组已保存。");
+      await putJSON("/api/config/groups", { groups: nextGroups });
+      setGroups(nextGroups);
+      setMessage(successMessage);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存失败");
     } finally {
@@ -51,15 +56,24 @@ export function GroupsPage() {
     }
   }
 
-  function addOrUpdateGroup() {
+  async function addOrUpdateGroup() {
     if (!draftGroup.name.trim()) return;
+    const nextGroup = normalizeGroup({ ...draftGroup, name: draftGroup.name.trim() });
+    const duplicate = groups.some((g) => g.name === nextGroup.name && g.name !== editingGroup?.name);
+    if (duplicate) {
+      setMessage(`分组 ${nextGroup.name} 已存在`);
+      return;
+    }
+
+    let nextGroups: GroupDef[];
     if (editingGroup) {
-      setGroups(groups.map((g) => g.name === editingGroup.name ? { ...draftGroup } : g));
+      nextGroups = groups.map((g) => g.name === editingGroup.name ? nextGroup : g);
     } else {
-      setGroups([...groups, { ...draftGroup }]);
+      nextGroups = [...groups, nextGroup];
     }
     setDraftGroup({ name: "", type: "select" });
     setEditingGroup(null);
+    await persistGroups(nextGroups, editingGroup ? "分组已保存。" : "分组已添加。");
   }
 
   function editGroup(g: GroupDef) {
@@ -67,19 +81,27 @@ export function GroupsPage() {
     setEditingGroup(g);
   }
 
-  function deleteGroup(name: string) {
-    setGroups(groups.filter((g) => g.name !== name));
+  async function deleteGroup(name: string) {
+    await persistGroups(groups.filter((g) => g.name !== name), "分组已删除。");
+  }
+
+  function normalizeGroup(group: GroupDef): GroupDef {
+    const next = { ...group };
+    if (testGroupTypes.has(next.type)) {
+      next.url = next.url || defaultTestURL;
+      next.interval = next.interval || defaultInterval;
+    }
+    return next;
+  }
+
+  function updateDraftType(type: string) {
+    setDraftGroup((d) => normalizeGroup({ ...d, type }));
   }
 
   return (
     <div className="page">
       <div className="page-header">
         <h1>代理分组</h1>
-        <div className="page-actions">
-          <button className="btn btn-primary" onClick={() => void saveGroups()} disabled={saving}>
-            {saving ? "保存中..." : "保存"}
-          </button>
-        </div>
       </div>
 
       <div className="table-container">
@@ -107,8 +129,8 @@ export function GroupsPage() {
                 <td>{g.provider ? <span className="badge badge-warning">{g.provider}</span> : "-"}</td>
                 <td>
                   <div className="btn-group">
-                    <button className="btn btn-sm" onClick={() => editGroup(g)}>修改</button>
-                    <button className="btn btn-sm btn-danger" onClick={() => deleteGroup(g.name)}>删除</button>
+                    <button className="btn btn-sm" onClick={() => editGroup(g)} disabled={saving}>修改</button>
+                    <button className="btn btn-sm btn-danger" onClick={() => void deleteGroup(g.name)} disabled={saving}>删除</button>
                   </div>
                 </td>
               </tr>
@@ -128,19 +150,19 @@ export function GroupsPage() {
           </div>
           <div className="form-group">
             <label>类型</label>
-            <select value={draftGroup.type} onChange={(e) => setDraftGroup((d) => ({ ...d, type: e.target.value }))}>
+            <select value={draftGroup.type} onChange={(e) => updateDraftType(e.target.value)}>
               {typeOptions.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
-          {draftGroup.type === "url-test" || draftGroup.type === "load-balance" ? (
+          {testGroupTypes.has(draftGroup.type) ? (
             <>
               <div className="form-group">
                 <label>测速 URL</label>
-                <input value={draftGroup.url ?? ""} onChange={(e) => setDraftGroup((d) => ({ ...d, url: e.target.value }))} placeholder="https://www.gstatic.com/generate_204" />
+                <input value={draftGroup.url ?? defaultTestURL} onChange={(e) => setDraftGroup((d) => ({ ...d, url: e.target.value }))} />
               </div>
               <div className="form-group">
                 <label>间隔 (秒)</label>
-                <input type="number" value={draftGroup.interval ?? ""} onChange={(e) => setDraftGroup((d) => ({ ...d, interval: Number(e.target.value) || 0 }))} />
+                <input type="number" value={draftGroup.interval ?? defaultInterval} onChange={(e) => setDraftGroup((d) => ({ ...d, interval: Number(e.target.value) || defaultInterval }))} />
               </div>
             </>
           ) : null}
@@ -152,7 +174,9 @@ export function GroupsPage() {
         </div>
         <div className="form-footer">
           {editingGroup ? <button className="btn" onClick={() => { setEditingGroup(null); setDraftGroup({ name: "", type: "select" }); }}>取消</button> : null}
-          <button className="btn btn-primary" onClick={addOrUpdateGroup}>{editingGroup ? "保存修改" : "添加"}</button>
+          <button className="btn btn-primary" onClick={() => void addOrUpdateGroup()} disabled={saving}>
+            {saving ? "保存中..." : editingGroup ? "保存修改" : "添加"}
+          </button>
         </div>
       </div>
 

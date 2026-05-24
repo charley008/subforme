@@ -31,6 +31,40 @@ type ProviderRefreshResult struct {
 }
 
 func UpsertProvider(dir string, provider ProviderAddon, publicBaseURL string) (ProviderAddon, error) {
+	providers, err := LoadProviders(dir)
+	if err != nil {
+		return ProviderAddon{}, err
+	}
+	var existing *ProviderAddon
+	for i := range providers {
+		if providers[i].ID == provider.ID {
+			existing = &providers[i]
+			break
+		}
+	}
+	provider, err = PrepareProvider(provider, publicBaseURL, existing)
+	if err != nil {
+		return ProviderAddon{}, err
+	}
+
+	found := false
+	for i := range providers {
+		if providers[i].ID == provider.ID {
+			providers[i] = provider
+			found = true
+			break
+		}
+	}
+	if !found {
+		providers = append(providers, provider)
+	}
+	if err := SaveProviders(dir, providers); err != nil {
+		return ProviderAddon{}, err
+	}
+	return provider, nil
+}
+
+func PrepareProvider(provider ProviderAddon, publicBaseURL string, existing *ProviderAddon) (ProviderAddon, error) {
 	provider.ID = strings.TrimSpace(provider.ID)
 	provider.Name = strings.TrimSpace(provider.Name)
 	provider.SourceURL = strings.TrimSpace(provider.SourceURL)
@@ -54,27 +88,10 @@ func UpsertProvider(dir string, provider ProviderAddon, publicBaseURL string) (P
 	if len(provider.ProxyGroups) == 0 {
 		provider.ProxyGroups = defaultProviderGroups(provider)
 	}
-
-	providers, err := LoadProviders(dir)
-	if err != nil {
-		return ProviderAddon{}, err
-	}
-	found := false
-	for i := range providers {
-		if providers[i].ID == provider.ID {
-			provider.LastUpdatedAt = providers[i].LastUpdatedAt
-			provider.LastError = providers[i].LastError
-			provider.ProxyCount = providers[i].ProxyCount
-			providers[i] = provider
-			found = true
-			break
-		}
-	}
-	if !found {
-		providers = append(providers, provider)
-	}
-	if err := SaveProviders(dir, providers); err != nil {
-		return ProviderAddon{}, err
+	if existing != nil {
+		provider.LastUpdatedAt = existing.LastUpdatedAt
+		provider.LastError = existing.LastError
+		provider.ProxyCount = existing.ProxyCount
 	}
 	return provider, nil
 }
@@ -128,6 +145,18 @@ func RefreshProvider(dir, id string) (ProviderRefreshResult, error) {
 	return ProviderRefreshResult{}, fmt.Errorf("provider %q not found", id)
 }
 
+func RefreshProviderAddon(dir string, provider ProviderAddon) (ProviderAddon, ProviderRefreshResult, error) {
+	result, err := refreshProvider(dir, &provider)
+	if err != nil {
+		provider.LastError = err.Error()
+		return provider, ProviderRefreshResult{}, err
+	}
+	provider.LastError = ""
+	provider.LastUpdatedAt = result.UpdatedAt
+	provider.ProxyCount = result.Count
+	return provider, result, nil
+}
+
 func RefreshDueProviders(dir string) {
 	providers, err := LoadProviders(dir)
 	if err != nil {
@@ -167,6 +196,16 @@ func ReadProviderFile(dir, id string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid provider path")
 	}
 	return os.ReadFile(absPath)
+}
+
+func RemoveProviderFile(dir, id string) error {
+	if !providerIDPattern.MatchString(id) {
+		return fmt.Errorf("invalid provider id")
+	}
+	if err := os.Remove(providerFilePath(dir, id)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 func refreshProvider(dir string, provider *ProviderAddon) (ProviderRefreshResult, error) {
