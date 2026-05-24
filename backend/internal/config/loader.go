@@ -34,12 +34,30 @@ func LoadBundle(dir string) (Bundle, error) {
 	return bundle, nil
 }
 
+func LoadTemplateBundle(dir string) (Bundle, error) {
+	var bundle Bundle
+	if err := ensureTemplateLayout(dir); err != nil {
+		return Bundle{}, fmt.Errorf("prepare template layout: %w", err)
+	}
+	if err := readYAML(filepath.Join(dir, "templates", "whitelist.yaml"), &bundle.BaseWhitelist); err != nil {
+		return Bundle{}, fmt.Errorf("load whitelist base: %w", err)
+	}
+	if err := readYAML(filepath.Join(dir, "templates", "blacklist.yaml"), &bundle.BaseBlacklist); err != nil {
+		return Bundle{}, fmt.Errorf("load blacklist base: %w", err)
+	}
+	return bundle, nil
+}
+
 func readYAML(path string, out any) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 	return yaml.Unmarshal(raw, out)
+}
+
+func ReadYAMLFile(dir, name string, out any) error {
+	return readYAML(filepath.Join(dir, name), out)
 }
 
 func readYAMLText(path string) (string, error) {

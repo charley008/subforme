@@ -66,33 +66,37 @@ type ServerTraffic struct {
 
 // User is a local user registry entry.
 type User struct {
-	ID         int64  `json:"id"`
-	Email      string `json:"email"`
-	UUID       string `json:"uuid"`
-	Password   string `json:"password,omitempty"`
-	Auth       string `json:"auth,omitempty"`
-	Flow       string `json:"flow,omitempty"`
-	Security   string `json:"security,omitempty"`
-	Remark     string `json:"remark,omitempty"`
-	TotalGB    int64  `json:"total_gb"`
-	ExpiryTime int64  `json:"expiry_time"`
-	LimitIP    int    `json:"limit_ip"`
-	SubID      string `json:"sub_id,omitempty"`
-	TgID       int64  `json:"tg_id,omitempty"`
-	Reset      int    `json:"reset,omitempty"`
-	Comment    string `json:"comment,omitempty"`
-	Enable     bool   `json:"enable"`
-	CreatedAt  int64  `json:"created_at"`
-	UpdatedAt  int64  `json:"updated_at"`
+	ID              int64  `json:"id"`
+	Email           string `json:"email"`
+	UUID            string `json:"uuid"`
+	Password        string `json:"password,omitempty"`
+	Auth            string `json:"auth,omitempty"`
+	Flow            string `json:"flow,omitempty"`
+	Security        string `json:"security,omitempty"`
+	Remark          string `json:"remark,omitempty"`
+	TotalGB         int64  `json:"total_gb"`
+	ExpiryTime      int64  `json:"expiry_time"`
+	LimitIP         int    `json:"limit_ip"`
+	SubID           string `json:"sub_id,omitempty"`
+	TgID            int64  `json:"tg_id,omitempty"`
+	Reset           int    `json:"reset,omitempty"`
+	Comment         string `json:"comment,omitempty"`
+	Enable          bool   `json:"enable"`
+	Mode            string `json:"mode,omitempty"`
+	NodeIDsJSON     string `json:"node_ids_json,omitempty"`
+	ProviderIDsJSON string `json:"provider_ids_json,omitempty"`
+	GroupNodesJSON  string `json:"group_nodes_json,omitempty"`
+	CreatedAt       int64  `json:"created_at"`
+	UpdatedAt       int64  `json:"updated_at"`
 }
 
 // UserAssignment links a user to a specific inbound on a specific server.
 type UserAssignment struct {
-	ID            int64 `json:"id"`
-	UserID        int64 `json:"user_id"`
-	ServerID      int64 `json:"server_id"`
-	InboundID     int64 `json:"inbound_id"`
+	ID            int64  `json:"id"`
+	UserID        int64  `json:"user_id"`
+	ServerID      int64  `json:"server_id"`
+	InboundID     int64  `json:"inbound_id"`
 	EmailOnServer string `json:"email_on_server"`
-	Enable        bool  `json:"enable"`
-	CreatedAt     int64 `json:"created_at"`
+	Enable        bool   `json:"enable"`
+	CreatedAt     int64  `json:"created_at"`
 }

@@ -70,9 +70,8 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 
 	groupEntries := convertGroups(groupList)
 	for _, addon := range selectedSet {
-		groupEntries = appendProviderGroupEntry(groupEntries, mainGroupName, addon.ID)
 		for _, g := range providerGroups(addon) {
-			groupEntries = append(groupEntries, groupEntryFromMap(g))
+			groupEntries = upsertProviderGroup(groupEntries, groupEntryFromMap(g))
 		}
 	}
 	groupEntries = filterInvalidGroupRefs(groupEntries, nodes)
@@ -183,20 +182,37 @@ func convertGroups(groupList []groups.ProxyGroup) []groupEntry {
 	return out
 }
 
-func appendProviderGroupEntry(entries []groupEntry, targetGroup string, entry string) []groupEntry {
-	for i, g := range entries {
-		if g.Name != targetGroup {
-			continue
-		}
-		for _, p := range g.Proxies {
-			if p == entry {
-				return entries
-			}
-		}
-		entries[i].Proxies = append(entries[i].Proxies, entry)
+func upsertProviderGroup(entries []groupEntry, next groupEntry) []groupEntry {
+	if next.Name == "" {
 		return entries
 	}
-	return entries
+	for i, existing := range entries {
+		if existing.Name != next.Name {
+			continue
+		}
+		entries[i] = mergeProviderGroup(existing, next)
+		return entries
+	}
+	return append(entries, next)
+}
+
+func mergeProviderGroup(existing, next groupEntry) groupEntry {
+	if existing.Type == "" {
+		existing.Type = next.Type
+	}
+	if existing.URL == "" {
+		existing.URL = next.URL
+	}
+	if existing.Interval == 0 {
+		existing.Interval = next.Interval
+	}
+	if len(existing.Use) == 0 {
+		existing.Use = next.Use
+	}
+	if len(existing.Proxies) == 0 {
+		existing.Proxies = next.Proxies
+	}
+	return existing
 }
 
 func groupEntryFromMap(m map[string]any) groupEntry {

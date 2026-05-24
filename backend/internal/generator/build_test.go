@@ -79,6 +79,38 @@ rules:
 	if !strings.Contains(got, "proxy-providers:\n  provider-main:") {
 		t.Fatalf("expected proxy provider entry, got %s", got)
 	}
+	if strings.Contains(got, "proxies:\n      - provider-main") {
+		t.Fatalf("provider should not be auto-attached to PROXY, got %s", got)
+	}
+}
+
+func TestBuildFinalYAMLDoesNotDuplicateExistingProviderGroup(t *testing.T) {
+	template := `proxies: []
+proxy-groups: []
+proxy-providers: {}
+rules:
+  - MATCH,DIRECT
+`
+	groupList := []groups.ProxyGroup{
+		{Name: "PROXY", Type: "select", Proxies: []string{"node-a"}},
+		{Name: "airport", Type: "url-test", URL: "https://www.gstatic.com/generate_204", Interval: 300, Use: []string{"airport"}},
+	}
+	addons := []config.ProviderAddon{
+		{ID: "airport", Name: "airport", ProxyProviders: map[string]any{"airport": map[string]any{"type": "http"}}},
+	}
+
+	raw, err := BuildFinalYAML(template, nil, groupList, addons, []string{"airport"}, "PROXY")
+	if err != nil {
+		t.Fatalf("BuildFinalYAML returned error: %v", err)
+	}
+
+	got := string(raw)
+	if strings.Count(got, "name: airport") != 1 {
+		t.Fatalf("expected one provider group, got %s", got)
+	}
+	if strings.Count(got, "use:\n      - airport") != 1 {
+		t.Fatalf("expected provider use to remain, got %s", got)
+	}
 }
 
 func TestBuildFinalYAMLRemovesUnselectedProviderRefs(t *testing.T) {

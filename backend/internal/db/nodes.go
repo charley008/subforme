@@ -36,6 +36,9 @@ func (s *Store) ReplaceNodes(nodes []Node2) error {
 	if _, err := tx.Exec("DELETE FROM nodes"); err != nil {
 		return err
 	}
+	if err := saveJSONSettingTx(tx, nodesKey, map[string]bool{"seeded": true}); err != nil {
+		return err
+	}
 
 	for _, n := range nodes {
 		nid := n.NodeID
