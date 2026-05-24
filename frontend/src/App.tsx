@@ -4,6 +4,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { GroupsPage } from "./pages/GroupsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NodesPage } from "./pages/NodesPage";
+import { ProvidersPage } from "./pages/ProvidersPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
 import { ServersPage } from "./pages/ServersPage";
 import { UserPreviewPage } from "./pages/UserPreviewPage";
@@ -33,6 +34,7 @@ export function App() {
           <Route path="nodes" element={<NodesPage />} />
           <Route path="servers" element={<ServersPage />} />
           <Route path="groups" element={<GroupsPage />} />
+          <Route path="providers" element={<ProvidersPage />} />
           <Route path="templates" element={<TemplatesPage />} />
           <Route path="xui" element={<Navigate to="/settings" replace />} />
           <Route path="preview" element={<Navigate to="/users" replace />} />

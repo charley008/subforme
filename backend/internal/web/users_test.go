@@ -59,7 +59,7 @@ func TestUsersPreviewReturnsNodes(t *testing.T) {
 			app: config.AppConfig{Mode: "whitelist"},
 		},
 		UserService: stubUserService{
-			nodes: []xui.Node{{Name: "vless", Server: "www.4738.org", Port: 6443}},
+			nodes: []xui.Node{{Name: "vless", Server: "example.com", Port: 6443}},
 		},
 	})
 

@@ -69,6 +69,22 @@ func (s stubConfigService) ReadProviders() ([]config.ProviderAddon, error) {
 	return s.providers, s.err
 }
 
+func (s stubConfigService) UpsertProvider(provider config.ProviderAddon, publicBaseURL string) (config.ProviderAddon, error) {
+	return provider, s.err
+}
+
+func (s stubConfigService) DeleteProvider(id string) error {
+	return s.err
+}
+
+func (s stubConfigService) RefreshProvider(id string) (config.ProviderRefreshResult, error) {
+	return config.ProviderRefreshResult{ID: id}, s.err
+}
+
+func (s stubConfigService) ReadProviderFile(id string) ([]byte, error) {
+	return []byte("proxies: []\n"), s.err
+}
+
 func TestGetAppConfigReturnsJSON(t *testing.T) {
 	router := NewRouter(Dependencies{
 		SessionSecret: testSessionSecret,

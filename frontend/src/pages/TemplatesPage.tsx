@@ -2,13 +2,12 @@ import { useEffect, useState } from "react";
 import { YamlEditor } from "../components/YamlEditor";
 import { getText, putText } from "../lib/api";
 
-type TemplateSection = "base" | "blacklist" | "whitelist" | "providers";
+type TemplateSection = "base" | "blacklist" | "whitelist";
 
 const sections: { key: TemplateSection; label: string; endpoint: string }[] = [
   { key: "base", label: "基础", endpoint: "/api/config/template?section=base" },
   { key: "whitelist", label: "默认直连", endpoint: "/api/config/template?section=whitelist" },
   { key: "blacklist", label: "默认代理", endpoint: "/api/config/template?section=blacklist" },
-  { key: "providers", label: "proxy-providers", endpoint: "/api/config/template?section=providers" },
 ];
 
 export function TemplatesPage() {
@@ -90,7 +89,7 @@ export function TemplatesPage() {
       </div>
 
       <div className="message" style={{ marginTop: 16 }}>
-        说明：基础是完整 config.yaml 去掉动态部分后的公共配置。<code>proxies: []</code>、<code>proxy-groups: []</code>、<code>proxy-providers: {}</code> 是占位符，由系统自动填充，删除后也会重新生成。
+        说明：基础是完整 config.yaml 去掉动态部分后的公共配置。<code>proxies: []</code>、<code>proxy-groups: []</code> 是占位符，由系统自动填充。第三方 <code>proxy-providers</code> 请到“第三方 Providers”页面管理。
       </div>
 
       <div className="message" style={{ marginTop: 8 }}>{message}</div>

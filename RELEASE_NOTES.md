@@ -1,41 +1,27 @@
-# v1.1.0
+# v1.1.1
 
-## 新增功能
+## New
 
-### 本地 SQLite 数据库
-- 用户、服务器、节点数据存储在本地 SQLite 中
-- 支持离线管理和缓存，不再完全依赖实时 API
-- 首次启动自动创建数据库和表结构
+- Added third-party Provider conversion. SubForMe can fetch an external subscription, extract `proxies`, store it under `proxy_providers`, refresh it on a schedule, and expose it through the local Provider endpoint.
+- Added a dedicated "Third-party Providers" page for creating, refreshing, editing, and deleting converted Providers.
+- User subscriptions can now include selected third-party Providers. Generated configs add matching `url-test` groups and `proxy-providers` entries automatically.
+- Added admin operation logs for login and panel actions, making Docker console logs more useful.
 
-### 多 3x-ui 面板管理
-- 支持添加多台 3x-ui 面板（VPS）
-- 每个面板独立配置地址和 API Key
-- 主面板作为用户管理入口，其他面板自动同步
+## Fixed
 
-### 一键同步
-- **导入**：从主面板拉取所有用户到本地 DB
-- **同步**：将本地用户推送到非主面板服务器
-- **删除同步**：主面板删除用户后，其他面板和本地同步删除
+- Cleaned stale `app.yaml` references when users, nodes, groups, or third-party Providers are deleted or changed.
+- Prevented deleted/unselected Provider names from remaining in generated proxy groups.
+- Protected Provider file serving against path traversal.
+- Improved 3x-ui API compatibility by trying common API base path variants.
+- Kept the last valid Provider YAML file when a refresh fails, so existing subscriptions do not break because of temporary upstream errors.
 
-### 实时流量查看
-- 独立的"刷新流量"按钮
-- 从所有服务器实时拉取流量数据
-- 按节点展示，直观对比各服务器用量
-- 数据本地缓存，刷新页面不丢失
+## Changed
 
-### 节点-服务器绑定
-- 节点可以关联到对应的 3x-ui 面板
-- 流量按服务器归类显示在对应节点下方
-- 数据库和 YAML 双向同步
+- Default release config is now sanitized for public use: no test panel URL, test API key, test nodes, or bundled third-party Provider.
+- Server management now states that only 3x-ui is currently supported.
+- `monaco-editor` updated to `0.53.0`.
 
-## 界面改进
-- 新增服务器管理页面
-- 概览页显示服务器数量
-- 设置页移除 3x-ui 配置项（移至服务器页）
-- 用户页节点选择优化
+## Verification
 
-## 技术变更
-- 引入 SQLite 数据库（modernc.org/sqlite，纯 Go 无 CGO）
-- 新增 `internal/db/` 数据库层（6 张表）
-- xui API 客户端扩展（addClient / updateClient / deleteClient）
-- YAML 配置与数据库双写，向后兼容
+- `go test ./...`
+- `npm.cmd run build`

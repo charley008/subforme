@@ -178,6 +178,19 @@ export function UserPreviewPage() {
     setEditingUser(null);
   }
 
+  function providerGroupDefs(user: UserSummary): GroupDef[] {
+    const selected = new Set(user.selected_providers ?? []);
+    return providers
+      .filter((provider) => selected.has(provider.id))
+      .map((provider) => ({
+        name: provider.id,
+        type: "url-test",
+        url: "http://www.gstatic.com/generate_204",
+        interval: 300,
+        provider: provider.id,
+      }));
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -307,9 +320,16 @@ export function UserPreviewPage() {
 
             {/* Available groups for this user */}
             {(() => {
-              const visibleGroups = groupDefs.filter((g) => {
+              const baseGroups = groupDefs.filter((g) => {
                 if (!g.provider) return true;
                 return (editingUser.selected_providers ?? []).includes(g.provider);
+              });
+              const providerGroups = providerGroupDefs(editingUser);
+              const seen = new Set<string>();
+              const visibleGroups = [...baseGroups, ...providerGroups].filter((g) => {
+                if (seen.has(g.name)) return false;
+                seen.add(g.name);
+                return true;
               });
               if (visibleGroups.length === 0) {
                 return <div className="empty-state">暂无可用分组，请先去代理分组页添加。</div>;

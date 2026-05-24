@@ -8,6 +8,30 @@ import (
 )
 
 func registerPublicRoutes(mux *http.ServeMux, deps Dependencies) {
+	mux.HandleFunc("/api/proxy-providers/", func(w http.ResponseWriter, r *http.Request) {
+		if deps.ConfigService == nil {
+			http.Error(w, "config service unavailable", http.StatusNotImplemented)
+			return
+		}
+		id := strings.TrimPrefix(r.URL.Path, "/api/proxy-providers/")
+		if id == r.URL.Path || !strings.HasSuffix(id, ".yaml") {
+			http.Error(w, "invalid provider path", http.StatusBadRequest)
+			return
+		}
+		id = strings.TrimSuffix(id, ".yaml")
+		if id == "" || strings.Contains(id, "/") || strings.Contains(id, ".") {
+			http.Error(w, "invalid provider id", http.StatusBadRequest)
+			return
+		}
+		raw, err := deps.ConfigService.ReadProviderFile(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+		_, _ = w.Write(raw)
+	})
+
 	mux.HandleFunc("/api/sub", func(w http.ResponseWriter, r *http.Request) {
 		user := r.URL.Query().Get("user")
 		if user == "" {

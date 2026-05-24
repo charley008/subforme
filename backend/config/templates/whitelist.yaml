@@ -32,23 +32,22 @@ rule-providers:
 rules:
   - DOMAIN,api.cloudflare.com,DIRECT
   - DOMAIN,www.gstatic.com,DIRECT
-  - DOMAIN,doh.dns.sb,自动选择
-  - DOMAIN,dns.google,自动选择
-  - DOMAIN,dns.cloudflare.com,自动选择
-  - GEOSITE,openai,手动选择
-  - GEOSITE,anthropic,手动选择
-  - GEOSITE,google-gemini,手动选择
-  - GEOSITE,tiktok,自动选择
-  - GEOSITE,github,自动选择
-  - GEOSITE,twitter,自动选择
-  - GEOSITE,youtube,自动选择
-  - GEOSITE,google,自动选择
+  - DOMAIN,doh.dns.sb,AUTO
+  - DOMAIN,dns.google,AUTO
+  - DOMAIN,dns.cloudflare.com,AUTO
+  - GEOSITE,openai,PROXY
+  - GEOSITE,anthropic,PROXY
+  - GEOSITE,google-gemini,PROXY
+  - GEOSITE,tiktok,AUTO
+  - GEOSITE,github,AUTO
+  - GEOSITE,twitter,AUTO
+  - GEOSITE,youtube,AUTO
+  - GEOSITE,google,AUTO
   - RULE-SET,lancidr,DIRECT
   - RULE-SET,cncidr,DIRECT
-  - RULE-SET,proxy,自动选择
+  - RULE-SET,proxy,AUTO
   - RULE-SET,cncidr,DIRECT
-  - RULE-SET,telegramcidr,自动选择
+  - RULE-SET,telegramcidr,AUTO
   - GEOIP,private,DIRECT
-  - GEOIP,telegram,自动选择
-  - MATCH,DIRECT #默认直连
-#自动选择，手动选择 请修改为代理分组中存在的组名
+  - GEOIP,telegram,AUTO
+  - MATCH,DIRECT # default direct

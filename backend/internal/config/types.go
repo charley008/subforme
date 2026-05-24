@@ -1,6 +1,6 @@
 package config
 
-const Version = "v1.1.0"
+const Version = "v1.1.1"
 
 type XUIConfig struct {
 	BaseURL  string `yaml:"base_url" json:"base_url"`
@@ -10,14 +10,14 @@ type XUIConfig struct {
 }
 
 type AppConfig struct {
-	Mode                       string              `yaml:"mode" json:"mode"`
-	CacheTTLSeconds            int                 `yaml:"cache_ttl_seconds" json:"cache_ttl_seconds"`
-	HealthcheckURL             string              `yaml:"healthcheck_url" json:"healthcheck_url"`
-	HealthcheckIntervalSeconds int                 `yaml:"healthcheck_interval_seconds" json:"healthcheck_interval_seconds"`
-	XUI                        XUIConfig           `yaml:"xui" json:"xui"`
-	UserModes                  map[string]string   `yaml:"user_modes,omitempty" json:"user_modes,omitempty"`
-	UserNodes                  map[string][]string `yaml:"user_nodes,omitempty" json:"user_nodes,omitempty"`
-	UserProviders              map[string][]string        `yaml:"user_providers,omitempty" json:"user_providers,omitempty"`
+	Mode                       string                         `yaml:"mode" json:"mode"`
+	CacheTTLSeconds            int                            `yaml:"cache_ttl_seconds" json:"cache_ttl_seconds"`
+	HealthcheckURL             string                         `yaml:"healthcheck_url" json:"healthcheck_url"`
+	HealthcheckIntervalSeconds int                            `yaml:"healthcheck_interval_seconds" json:"healthcheck_interval_seconds"`
+	XUI                        XUIConfig                      `yaml:"xui" json:"xui"`
+	UserModes                  map[string]string              `yaml:"user_modes,omitempty" json:"user_modes,omitempty"`
+	UserNodes                  map[string][]string            `yaml:"user_nodes,omitempty" json:"user_nodes,omitempty"`
+	UserProviders              map[string][]string            `yaml:"user_providers,omitempty" json:"user_providers,omitempty"`
 	UserGroupNodes             map[string]map[string][]string `yaml:"user_group_nodes,omitempty" json:"user_group_nodes,omitempty"`
 }
 
@@ -30,22 +30,27 @@ type ManagedNode struct {
 }
 
 type RuntimeConfig struct {
-	Listen         string    `json:"listen"`
-	AdminUsername  string    `json:"admin_username"`
-	AdminPassword  string    `json:"admin_password"`
-	SessionSecret  string    `json:"session_secret"`
-	ConfigDir      string    `json:"config_dir"`
-	FrontendDir    string    `json:"frontend_dir"`
-	XUI            XUIConfig `json:"xui"`
-	RuntimePath    string    `json:"-"`
+	Listen        string    `json:"listen"`
+	AdminUsername string    `json:"admin_username"`
+	AdminPassword string    `json:"admin_password"`
+	SessionSecret string    `json:"session_secret"`
+	ConfigDir     string    `json:"config_dir"`
+	FrontendDir   string    `json:"frontend_dir"`
+	XUI           XUIConfig `json:"xui"`
+	RuntimePath   string    `json:"-"`
 }
 
 type ProviderAddon struct {
-	ID             string                   `yaml:"id" json:"id"`
-	Name           string                   `yaml:"name" json:"name"`
-	AttachToGroup  string                   `yaml:"attach_to_group,omitempty" json:"attach_to_group,omitempty"`
-	ProxyProviders map[string]any           `yaml:"proxy_providers" json:"proxy_providers"`
-	ProxyGroups    []map[string]any         `yaml:"proxy_groups" json:"proxy_groups"`
+	ID                    string           `yaml:"id" json:"id"`
+	Name                  string           `yaml:"name" json:"name"`
+	SourceURL             string           `yaml:"source_url,omitempty" json:"source_url,omitempty"`
+	UpdateIntervalSeconds int              `yaml:"update_interval_seconds,omitempty" json:"update_interval_seconds,omitempty"`
+	InsecureSkipVerify    bool             `yaml:"insecure_skip_verify,omitempty" json:"insecure_skip_verify,omitempty"`
+	LastUpdatedAt         int64            `yaml:"last_updated_at,omitempty" json:"last_updated_at,omitempty"`
+	LastError             string           `yaml:"last_error,omitempty" json:"last_error,omitempty"`
+	ProxyCount            int              `yaml:"proxy_count,omitempty" json:"proxy_count,omitempty"`
+	ProxyProviders        map[string]any   `yaml:"proxy_providers" json:"proxy_providers"`
+	ProxyGroups           []map[string]any `yaml:"proxy_groups" json:"proxy_groups"`
 }
 
 type BaseConfig struct {

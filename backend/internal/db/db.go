@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 1
+const schemaVersion = 4
 
 type Store struct {
 	DB *sql.DB
@@ -59,24 +59,24 @@ func (s *Store) migrate() error {
 		return fmt.Errorf("read schema version: %w", err)
 	}
 
-	if current < 1 {
-		if err := s.migrateV1(); err != nil {
-			return err
-		}
+	migrations := []struct {
+		version int
+		run     func() error
+	}{
+		{version: 1, run: s.migrateV1},
+		{version: 2, run: s.migrateV2},
+		{version: 3, run: s.migrateV3},
+		{version: 4, run: s.migrateV4},
 	}
-	if current < 2 {
-		if err := s.migrateV2(); err != nil {
-			return err
+
+	for _, migration := range migrations {
+		if migration.version > schemaVersion {
+			break
 		}
-	}
-	if current < 3 {
-		if err := s.migrateV3(); err != nil {
-			return err
-		}
-	}
-	if current < 4 {
-		if err := s.migrateV4(); err != nil {
-			return err
+		if current < migration.version {
+			if err := migration.run(); err != nil {
+				return err
+			}
 		}
 	}
 

@@ -32,6 +32,10 @@ type ConfigService interface {
 	ReadManagedNodes() ([]config.ManagedNode, error)
 	UpdateManagedNodes(next []config.ManagedNode) error
 	ReadProviders() ([]config.ProviderAddon, error)
+	UpsertProvider(provider config.ProviderAddon, publicBaseURL string) (config.ProviderAddon, error)
+	DeleteProvider(id string) error
+	RefreshProvider(id string) (config.ProviderRefreshResult, error)
+	ReadProviderFile(id string) ([]byte, error)
 }
 
 type XUIService interface {

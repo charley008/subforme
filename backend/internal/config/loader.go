@@ -66,6 +66,14 @@ func SaveGroupsConfig(dir string, cfg GroupConfig) error {
 	return writeYAML(filepath.Join(dir, "groups.yaml"), cfg)
 }
 
+func LoadGroupsConfig(dir string) (GroupConfig, error) {
+	var cfg GroupConfig
+	if err := readYAML(filepath.Join(dir, "groups.yaml"), &cfg); err != nil {
+		return GroupConfig{}, err
+	}
+	return cfg, nil
+}
+
 func LoadProviders(dir string) ([]ProviderAddon, error) {
 	path := filepath.Join(dir, "providers.yaml")
 	if _, err := os.Stat(path); err != nil {

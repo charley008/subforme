@@ -120,7 +120,10 @@ export function ServersPage() {
   return (
     <div style={{ padding: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>服务器管理</h2>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>服务器管理</h2>
+          <div style={{ marginTop: 4, fontSize: 12, color: "#64748b" }}>目前仅支持 3x-ui，其他面板待开发</div>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-sm btn-primary" onClick={() => setEditing({ scheme: "https", port: 2053, base_path: "/xui/", enabled: true })}>
             + 添加服务器

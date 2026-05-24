@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -78,6 +79,30 @@ func (c *Client) joinURL(nextPath string) (string, error) {
 }
 
 func (c *Client) inboundListCandidates() []string {
+	return c.candidateURLs(
+		"/panel/api/inbounds/list",
+		"/xui/panel/api/inbounds/list",
+		"/api/inbounds/list",
+	)
+}
+
+func (c *Client) inboundActionCandidates(action string) []string {
+	return c.candidateURLs(
+		"/panel/api/inbounds/"+strings.TrimLeft(action, "/"),
+		"/xui/panel/api/inbounds/"+strings.TrimLeft(action, "/"),
+		"/api/inbounds/"+strings.TrimLeft(action, "/"),
+	)
+}
+
+func (c *Client) serverActionCandidates(action string) []string {
+	return c.candidateURLs(
+		"/panel/api/server/"+strings.TrimLeft(action, "/"),
+		"/xui/panel/api/server/"+strings.TrimLeft(action, "/"),
+		"/api/server/"+strings.TrimLeft(action, "/"),
+	)
+}
+
+func (c *Client) candidateURLs(paths ...string) []string {
 	candidates := make([]string, 0, 3)
 	seen := map[string]struct{}{}
 
@@ -93,9 +118,9 @@ func (c *Client) inboundListCandidates() []string {
 		candidates = append(candidates, endpoint)
 	}
 
-	add("/panel/api/inbounds/list")
-	add("/xui/panel/api/inbounds/list")
-	add("/api/inbounds/list")
+	for _, p := range paths {
+		add(p)
+	}
 
 	return candidates
 }
@@ -155,150 +180,100 @@ func (c *Client) listInboundsAt(ctx context.Context, endpoint string) ([]Inbound
 // AddClient adds one or more clients to an inbound.
 // settings is the JSON-encoded settings.clients array.
 func (c *Client) AddClient(ctx context.Context, inboundID int, settings string) error {
-	endpoint, err := c.joinURL("/panel/api/inbounds/addClient")
-	if err != nil {
-		return err
-	}
-
 	// The 3x-ui API expects settings as a JSON-encoded string value,
 	// not a raw JSON object. json.Marshal does the proper escaping.
 	settingsEncoded, _ := json.Marshal(settings)
 	body := fmt.Sprintf(`{"id":%d,"settings":%s}`, inboundID, string(settingsEncoded))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.Do(ctx, req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("add client: %s", resp.Status)
-	}
-	// 3x-ui returns HTTP 200 even on failure, check body
-	var apiResp apiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err == nil {
-		if !apiResp.Success {
-			return fmt.Errorf("add client rejected: %s", apiResp.Msg)
-		}
-	}
-	return nil
+	return c.postJSONCandidates(ctx, c.inboundActionCandidates("addClient"), body, "add client")
 }
 
 // UpdateClient updates a single client's configuration.
 // clientID is the UUID/password of the client to update.
 // settings is the JSON-encoded inbound settings with updated client.
 func (c *Client) UpdateClient(ctx context.Context, clientID string, inboundID int, settings string) error {
-	endpoint, err := c.joinURL("/panel/api/inbounds/updateClient/" + clientID)
-	if err != nil {
-		return err
-	}
-
 	settingsEncoded, _ := json.Marshal(settings)
 	body := fmt.Sprintf(`{"id":%d,"settings":%s}`, inboundID, string(settingsEncoded))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.Do(ctx, req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("update client: %s", resp.Status)
-	}
-	var apiResp apiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err == nil {
-		if !apiResp.Success {
-			return fmt.Errorf("update client rejected: %s", apiResp.Msg)
-		}
-	}
-	return nil
+	return c.postJSONCandidates(ctx, c.inboundActionCandidates("updateClient/"+url.PathEscape(clientID)), body, "update client")
 }
 
 // DeleteClient removes a client from an inbound by its UUID/password.
 func (c *Client) DeleteClient(ctx context.Context, inboundID int, clientID string) error {
-	endpoint, err := c.joinURL(fmt.Sprintf("/panel/api/inbounds/%d/delClient/%s", inboundID, clientID))
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err := c.Do(ctx, req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("delete client: %s", resp.Status)
-	}
-	var apiResp apiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err == nil {
-		if !apiResp.Success {
-			return fmt.Errorf("delete client rejected: %s", apiResp.Msg)
-		}
-	}
-	return nil
+	action := fmt.Sprintf("%d/delClient/%s", inboundID, url.PathEscape(clientID))
+	return c.postJSONCandidates(ctx, c.inboundActionCandidates(action), "", "delete client")
 }
 
 // DeleteClientByEmail removes a client from an inbound by email.
 func (c *Client) DeleteClientByEmail(ctx context.Context, inboundID int, email string) error {
-	endpoint, err := c.joinURL(fmt.Sprintf("/panel/api/inbounds/%d/delClientByEmail/%s", inboundID, url.PathEscape(email)))
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err := c.Do(ctx, req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("delete client by email: %s", resp.Status)
-	}
-	return nil
+	action := fmt.Sprintf("%d/delClientByEmail/%s", inboundID, url.PathEscape(email))
+	return c.postJSONCandidates(ctx, c.inboundActionCandidates(action), "", "delete client by email")
 }
 
 // RestartXray triggers a Xray restart on the panel.
 func (c *Client) RestartXray(ctx context.Context) error {
-	endpoint, err := c.joinURL("/panel/api/server/restartXrayService")
-	if err != nil {
-		return err
-	}
+	var lastErr error
+	for _, endpoint := range c.serverActionCandidates("restartXrayService") {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+		if err != nil {
+			return err
+		}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
-	if err != nil {
-		return err
-	}
+		resp, err := c.Do(ctx, req)
+		if err != nil {
+			return err
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
 
-	resp, err := c.Do(ctx, req)
-	if err != nil {
-		return err
+		// 202 Accepted is also valid here
+		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted {
+			return nil
+		}
+		lastErr = fmt.Errorf("restart xray at %s returned %s", endpoint, resp.Status)
 	}
-	defer resp.Body.Close()
+	return lastErr
+}
 
-	// 202 Accepted is also valid here
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-		return fmt.Errorf("restart xray: %s", resp.Status)
+func (c *Client) postJSONCandidates(ctx context.Context, endpoints []string, body string, action string) error {
+	var lastErr error
+	for _, endpoint := range endpoints {
+		var reader io.Reader
+		if body != "" {
+			reader = strings.NewReader(body)
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, reader)
+		if err != nil {
+			return err
+		}
+		if body != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+
+		resp, err := c.Do(ctx, req)
+		if err != nil {
+			return err
+		}
+		raw, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return readErr
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("%s at %s returned %s", action, endpoint, resp.Status)
+			continue
+		}
+		if len(strings.TrimSpace(string(raw))) == 0 {
+			return nil
+		}
+
+		var apiResp apiResponse
+		if err := json.Unmarshal(raw, &apiResp); err != nil {
+			return nil
+		}
+		if !apiResp.Success {
+			return fmt.Errorf("%s rejected: %s", action, apiResp.Msg)
+		}
+		return nil
 	}
-	return nil
+	return lastErr
 }

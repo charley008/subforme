@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 
 	"subforme/backend/internal/config"
 	"subforme/backend/internal/db"
@@ -193,6 +194,66 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(providers)
+	}))
+
+	mux.HandleFunc("/api/provider-converters", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+		if deps.ConfigService == nil {
+			http.Error(w, "config service unavailable", http.StatusNotImplemented)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			providers, err := deps.ConfigService.ReadProviders()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadGateway)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(providers)
+		case http.MethodPost:
+			var provider config.ProviderAddon
+			if err := json.NewDecoder(r.Body).Decode(&provider); err != nil {
+				http.Error(w, "invalid json", http.StatusBadRequest)
+				return
+			}
+			saved, err := deps.ConfigService.UpsertProvider(provider, publicBaseURLForRequest(r))
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(saved)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+
+	mux.HandleFunc("/api/provider-converters/refresh/", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		id := strings.TrimPrefix(r.URL.Path, "/api/provider-converters/refresh/")
+		result, err := deps.ConfigService.RefreshProvider(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(result)
+	}))
+
+	mux.HandleFunc("/api/provider-converters/delete/", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		id := strings.TrimPrefix(r.URL.Path, "/api/provider-converters/delete/")
+		if err := deps.ConfigService.DeleteProvider(id); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}))
 }
 

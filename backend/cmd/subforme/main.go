@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -33,6 +34,7 @@ func main() {
 	defer store.Close()
 
 	service := app.NewServiceWithDB(runtimeConfig.ConfigDir, runtimeConfig.XUI, store)
+	service.StartProviderUpdater(context.Background())
 
 	authSvc := &app.StaticAuthService{
 		Username: runtimeConfig.AdminUsername,
@@ -74,7 +76,7 @@ func ensureDefaultConfig(configDir, exeDir string) {
 	// Copy defaults from bundled directory (Docker) or from exe sibling dir
 	sourceCandidates := []string{
 		filepath.Join(exeDir, "defaults", "config"), // Docker image bundled copy
-		filepath.Join(exeDir, "config"),              // fallback
+		filepath.Join(exeDir, "config"),             // fallback
 	}
 	var sourceDir string
 	for _, dir := range sourceCandidates {

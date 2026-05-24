@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"subforme/backend/internal/auth"
 	"subforme/backend/internal/config"
@@ -134,7 +135,10 @@ func (s Service) ReadGroupsConfig() (config.GroupConfig, error) {
 }
 
 func (s Service) UpdateGroupsConfig(next config.GroupConfig) error {
-	return config.SaveGroupsConfig(s.ConfigDir, next)
+	if err := config.SaveGroupsConfig(s.ConfigDir, next); err != nil {
+		return err
+	}
+	return s.cleanupAppConfig()
 }
 
 func (s Service) ReadBaseYAML(mode string) (string, error) {
@@ -193,6 +197,68 @@ func (s Service) loadManagedNodes() []config.ManagedNode {
 	return nodes
 }
 
+func (s Service) cleanupAppConfig() error {
+	state := config.AppCleanupState{}
+
+	if s.DB != nil {
+		if users, err := s.DB.ListUsers(); err == nil {
+			state.UsersKnown = true
+			for _, u := range users {
+				state.Users = append(state.Users, u.Email)
+			}
+		}
+		if nodes, err := s.DB.ListNodeDB(); err == nil {
+			state.NodeIDsKnown = true
+			state.NodeNamesKnown = true
+			for _, n := range nodes {
+				state.NodeIDs = append(state.NodeIDs, n.NodeID)
+				state.NodeNames = append(state.NodeNames, n.Name)
+			}
+		}
+	}
+	if !state.NodeIDsKnown || !state.NodeNamesKnown {
+		if nodes, err := config.LoadManagedNodes(s.ConfigDir); err == nil {
+			state.NodeIDsKnown = true
+			state.NodeNamesKnown = true
+			for _, n := range nodes {
+				state.NodeIDs = append(state.NodeIDs, n.ID)
+				state.NodeNames = append(state.NodeNames, n.Name)
+			}
+		}
+	}
+	if providers, err := config.LoadProviders(s.ConfigDir); err == nil {
+		state.ProvidersKnown = true
+		for _, p := range providers {
+			state.Providers = append(state.Providers, p.ID)
+		}
+	}
+	if groupCfg, err := config.LoadGroupsConfig(s.ConfigDir); err == nil {
+		state.GroupsKnown = true
+		state.Groups = groupConfigNames(groupCfg)
+	}
+
+	return config.CleanupAppConfigFile(s.ConfigDir, state)
+}
+
+func groupConfigNames(cfg config.GroupConfig) []string {
+	if len(cfg.Groups) > 0 {
+		names := make([]string, 0, len(cfg.Groups))
+		for _, g := range cfg.Groups {
+			names = append(names, g.Name)
+		}
+		return names
+	}
+
+	names := []string{cfg.GroupNames.Proxy, cfg.GroupNames.Auto}
+	for region := range cfg.Regions {
+		names = append(names, region)
+	}
+	if cfg.GroupNames.Other != "" {
+		names = append(names, cfg.GroupNames.Other)
+	}
+	return names
+}
+
 func (s Service) ReadManagedNodes() ([]config.ManagedNode, error) {
 	return config.LoadManagedNodes(s.ConfigDir)
 }
@@ -203,6 +269,47 @@ func (s Service) UpdateManagedNodes(next []config.ManagedNode) error {
 
 func (s Service) ReadProviders() ([]config.ProviderAddon, error) {
 	return config.LoadProviders(s.ConfigDir)
+}
+
+func (s Service) UpsertProvider(provider config.ProviderAddon, publicBaseURL string) (config.ProviderAddon, error) {
+	return config.UpsertProvider(s.ConfigDir, provider, publicBaseURL)
+}
+
+func (s Service) DeleteProvider(id string) error {
+	if err := config.DeleteProvider(s.ConfigDir, id); err != nil {
+		return err
+	}
+	return s.cleanupAppConfig()
+}
+
+func (s Service) RefreshProvider(id string) (config.ProviderRefreshResult, error) {
+	result, err := config.RefreshProvider(s.ConfigDir, id)
+	if err != nil {
+		log.Printf("[provider] refresh %s failed: %v", id, err)
+		return result, err
+	}
+	log.Printf("[provider] refresh %s ok: %d proxies", id, result.Count)
+	return result, nil
+}
+
+func (s Service) ReadProviderFile(id string) ([]byte, error) {
+	return config.ReadProviderFile(s.ConfigDir, id)
+}
+
+func (s Service) StartProviderUpdater(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		config.RefreshDueProviders(s.ConfigDir)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				config.RefreshDueProviders(s.ConfigDir)
+			}
+		}
+	}()
 }
 
 func (s Service) DetectAvailableNodes() ([]xui.AvailableNode, error) {
@@ -419,7 +526,10 @@ func (s Service) DBUpdateUser(u *db.User) error {
 }
 
 func (s Service) DBDeleteUser(id int64) error {
-	return s.DB.DeleteUser(id)
+	if err := s.DB.DeleteUser(id); err != nil {
+		return err
+	}
+	return s.cleanupAppConfig()
 }
 
 func (s Service) DBListServers() ([]db.Server, error) {
@@ -445,7 +555,10 @@ func (s Service) DBReplaceNodes(nodes []db.Node2) error {
 			ServerID: n.ServerID,
 		}
 	}
-	return config.SaveManagedNodes(s.ConfigDir, ymlNodes)
+	if err := config.SaveManagedNodes(s.ConfigDir, ymlNodes); err != nil {
+		return err
+	}
+	return s.cleanupAppConfig()
 }
 
 func (s Service) DBCreateServer(sv *db.Server) error {
@@ -635,6 +748,11 @@ func (s Service) ImportFromServer(ctx context.Context, serverID int64) (*ImportR
 		log.Printf("[import] user %s not found on main server, removing from DB", email)
 		s.DB.DeleteUser(u.ID)
 		removed = append(removed, email)
+	}
+	if len(removed) > 0 {
+		if err := s.cleanupAppConfig(); err != nil {
+			log.Printf("[import] cleanup app config failed: %v", err)
+		}
 	}
 
 	log.Printf("[import] done: %d new, %d updated, %d removed", imported, updated, len(removed))

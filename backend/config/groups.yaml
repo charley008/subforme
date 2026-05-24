@@ -1,20 +1,15 @@
 healthcheck:
-    url: ""
-    interval_seconds: 0
+  url: https://www.gstatic.com/generate_204
+  interval_seconds: 300
 regions: {}
 group_names:
-    proxy: ""
-    auto: ""
-    other: ""
+  proxy: PROXY
+  auto: AUTO
+  other: DIRECT
 groups:
-    - name: 手动选择
-      type: select
-    - name: 自动选择
-      type: url-test
-      url: https://www.gstatic.com/generate_204
-      interval: 300
-    - name: test
-      type: url-test
-      url: https://www.gstatic.com/generate_204
-      interval: 300
-      provider: test
+  - name: PROXY
+    type: select
+  - name: AUTO
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    interval: 300

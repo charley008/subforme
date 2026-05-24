@@ -70,15 +70,12 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 
 	groupEntries := convertGroups(groupList)
 	for _, addon := range selectedSet {
-		attach := addon.AttachToGroup
-		if attach == "" {
-			attach = mainGroupName
-		}
-		groupEntries = appendProviderGroupEntry(groupEntries, attach, addon.Name)
-		for _, g := range addon.ProxyGroups {
+		groupEntries = appendProviderGroupEntry(groupEntries, mainGroupName, addon.ID)
+		for _, g := range providerGroups(addon) {
 			groupEntries = append(groupEntries, groupEntryFromMap(g))
 		}
 	}
+	groupEntries = filterInvalidGroupRefs(groupEntries, nodes)
 
 	proxyNode, err := yamlx.ToNode(proxies)
 	if err != nil {
@@ -117,6 +114,49 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 	}
 
 	return yamlx.Marshal(doc)
+}
+
+func filterInvalidGroupRefs(entries []groupEntry, nodes []xui.Node) []groupEntry {
+	valid := map[string]struct{}{
+		"DIRECT": {},
+		"REJECT": {},
+		"GLOBAL": {},
+		"PASS":   {},
+	}
+	for _, node := range nodes {
+		valid[node.Name] = struct{}{}
+	}
+	for _, entry := range entries {
+		valid[entry.Name] = struct{}{}
+	}
+	for i := range entries {
+		if len(entries[i].Proxies) == 0 {
+			continue
+		}
+		filtered := entries[i].Proxies[:0]
+		for _, proxy := range entries[i].Proxies {
+			if _, ok := valid[proxy]; ok {
+				filtered = append(filtered, proxy)
+			}
+		}
+		entries[i].Proxies = filtered
+	}
+	return entries
+}
+
+func providerGroups(addon config.ProviderAddon) []map[string]any {
+	if len(addon.ProxyGroups) > 0 {
+		return addon.ProxyGroups
+	}
+	return []map[string]any{
+		{
+			"name":     addon.ID,
+			"type":     "url-test",
+			"url":      "http://www.gstatic.com/generate_204",
+			"interval": 300,
+			"use":      []string{addon.ID},
+		},
+	}
 }
 
 func convertGroups(groupList []groups.ProxyGroup) []groupEntry {

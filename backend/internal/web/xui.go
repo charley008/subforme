@@ -19,21 +19,21 @@ type userModeRequest struct {
 }
 
 type userSummaryResponse struct {
-	Email             string               `json:"email"`
-	Remark            string               `json:"remark"`
-	Protocol          string               `json:"protocol"`
-	NodeCount         int                  `json:"node_count"`
-	Server            string               `json:"server"`
-	Port              int                  `json:"port"`
-	LastRemark        string               `json:"last_remark,omitempty"`
-	Mode              string               `json:"mode"`
-	ShareURL          string               `json:"share_url"`
-	SelectedNodes     []string             `json:"selected_nodes,omitempty"`
-	SelectedProviders []string             `json:"selected_providers,omitempty"`
-	GroupNodes        map[string][]string  `json:"group_nodes,omitempty"`
-	UUID              string               `json:"uuid,omitempty"`
-	Password          string               `json:"password,omitempty"`
-	ServerTraffic     []db.ServerTraffic   `json:"server_traffic,omitempty"`
+	Email             string              `json:"email"`
+	Remark            string              `json:"remark"`
+	Protocol          string              `json:"protocol"`
+	NodeCount         int                 `json:"node_count"`
+	Server            string              `json:"server"`
+	Port              int                 `json:"port"`
+	LastRemark        string              `json:"last_remark,omitempty"`
+	Mode              string              `json:"mode"`
+	ShareURL          string              `json:"share_url"`
+	SelectedNodes     []string            `json:"selected_nodes,omitempty"`
+	SelectedProviders []string            `json:"selected_providers,omitempty"`
+	GroupNodes        map[string][]string `json:"group_nodes,omitempty"`
+	UUID              string              `json:"uuid,omitempty"`
+	Password          string              `json:"password,omitempty"`
+	ServerTraffic     []db.ServerTraffic  `json:"server_traffic,omitempty"`
 }
 
 func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
@@ -295,11 +295,15 @@ func resolveUserMode(appConfig config.AppConfig, user string) string {
 }
 
 func shareURLForRequest(r *http.Request, user string) string {
+	return fmt.Sprintf("%s/api/sub?user=%s", publicBaseURLForRequest(r), user)
+}
+
+func publicBaseURLForRequest(r *http.Request) string {
 	scheme := "http"
 	if forwarded := r.Header.Get("X-Forwarded-Proto"); forwarded != "" {
 		scheme = strings.Split(forwarded, ",")[0]
 	} else if r.TLS != nil {
 		scheme = "https"
 	}
-	return fmt.Sprintf("%s://%s/api/sub?user=%s", scheme, r.Host, user)
+	return fmt.Sprintf("%s://%s", scheme, r.Host)
 }

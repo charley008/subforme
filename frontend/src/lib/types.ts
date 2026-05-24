@@ -93,8 +93,13 @@ export type AvailableNode = {
 
 export type ProviderAddon = {
   id: string;
-  name: string;
-  attach_to_group?: string;
+  name?: string;
+  source_url?: string;
+  update_interval_seconds?: number;
+  insecure_skip_verify?: boolean;
+  last_updated_at?: number;
+  last_error?: string;
+  proxy_count?: number;
 };
 
 export type NodePreview = {

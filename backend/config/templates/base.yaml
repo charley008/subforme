@@ -8,9 +8,13 @@ sniffer:
   enable: true
   sniff:
     TLS:
-      ports: [443, 6443]
+      ports:
+        - 443
+        - 6443
     HTTP:
-      ports: [80, 8080-8880]
+      ports:
+        - 80
+        - 8080-8880
       override-destination: true
 dns:
   enable: true
@@ -39,10 +43,10 @@ dns:
     - https://doh.pub/dns-query
     - https://dns.alidns.com/dns-query
   fallback:
-    - https://doh.dns.sb/dns-query#自动选择
-    - https://dns.cloudflare.com/dns-query#自动选择
-    - https://dns.adguard-dns.com/dns-query#自动选择
-    - https://dns.google/dns-query#自动选择
+    - https://doh.dns.sb/dns-query#AUTO
+    - https://dns.cloudflare.com/dns-query#AUTO
+    - https://dns.adguard-dns.com/dns-query#AUTO
+    - https://dns.google/dns-query#AUTO
   fallback-filter:
     geoip: true
     geoip-code: CN

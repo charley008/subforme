@@ -10,6 +10,7 @@ const navItems = [
   { to: "/nodes", label: "节点", icon: "🖥️" },
   { to: "/servers", label: "服务器", icon: "🌐" },
   { to: "/groups", label: "代理分组", icon: "🔀" },
+  { to: "/providers", label: "第三方 Providers", icon: "📡" },
   { to: "/templates", label: "模板", icon: "📄" },
 ];
 
