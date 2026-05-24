@@ -90,6 +90,58 @@ func TestGenerateBuildsYAMLFromBundleAndNodes(t *testing.T) {
 	}
 }
 
+func TestGenerateUsesFirstSelectGroupWhenGroupNameProxyIsEmpty(t *testing.T) {
+	tmp := t.TempDir()
+	if err := config.SaveProviders(tmp, []config.ProviderAddon{{
+		ID:             "airport",
+		Name:           "airport",
+		ProxyProviders: map[string]any{"airport": map[string]any{"type": "http", "url": "https://example.com/provider.yaml"}},
+	}}); err != nil {
+		t.Fatalf("save providers: %v", err)
+	}
+
+	svc := Service{
+		ConfigDir: tmp,
+		Loader: func(dir string) (config.Bundle, error) {
+			return config.Bundle{
+				App: config.AppConfig{
+					Mode:          "whitelist",
+					UserProviders: map[string][]string{"alice": {"airport"}},
+				},
+				BaseWhitelist: config.BaseConfig{
+					Rules: []string{"MATCH,DIRECT"},
+				},
+				BaseBlacklist: config.BaseConfig{
+					Rules: []string{"MATCH,PROXY"},
+				},
+				Groups: config.GroupConfig{
+					Groups: []config.GroupDef{
+						{Name: "PROXY", Type: "select"},
+						{Name: "GPT", Type: "url-test", URL: "https://www.gstatic.com/generate_204", Interval: 300},
+					},
+				},
+			}, nil
+		},
+		ResolverFactory: func(cfg config.XUIConfig) XUIResolver {
+			return fakeResolver{
+				nodes: []xui.Node{{Name: "node-a", Type: "vless", Server: "example.com", Port: 443, UUID: "uuid"}},
+			}
+		},
+		TemplateLoader: func(dir, mode string) (string, error) {
+			return "proxies: []\nproxy-groups: []\nproxy-providers: {}\nrules:\n  - MATCH,DIRECT\n", nil
+		},
+	}
+
+	raw, err := svc.Generate("alice")
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+	got := string(raw)
+	if !strings.Contains(got, "name: PROXY") || !strings.Contains(got, "- airport") {
+		t.Fatalf("expected provider to be attached to PROXY, got %s", got)
+	}
+}
+
 type fakeResolver struct {
 	nodes  []xui.Node
 	users  []xui.UserSummary

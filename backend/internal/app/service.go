@@ -93,7 +93,7 @@ func (s Service) Generate(user string) ([]byte, error) {
 	}
 
 	groupList := groups.Build(bundle.Groups, nodes, bundle.App.UserGroupNodes[user], bundle.App.UserProviders[user])
-	raw, err := generator.BuildFinalYAML(templateRaw, nodes, groupList, providers, bundle.App.UserProviders[user], bundle.Groups.GroupNames.Proxy)
+	raw, err := generator.BuildFinalYAML(templateRaw, nodes, groupList, providers, bundle.App.UserProviders[user], mainProxyGroupName(bundle.Groups, groupList))
 	if err != nil {
 		return nil, fmt.Errorf("build final yaml: %w", err)
 	}
@@ -257,6 +257,23 @@ func groupConfigNames(cfg config.GroupConfig) []string {
 		names = append(names, cfg.GroupNames.Other)
 	}
 	return names
+}
+
+func mainProxyGroupName(cfg config.GroupConfig, groupList []groups.ProxyGroup) string {
+	if cfg.GroupNames.Proxy != "" {
+		return cfg.GroupNames.Proxy
+	}
+	for _, group := range groupList {
+		if len(group.Use) == 0 && group.Type == "select" {
+			return group.Name
+		}
+	}
+	for _, group := range groupList {
+		if len(group.Use) == 0 {
+			return group.Name
+		}
+	}
+	return ""
 }
 
 func (s Service) ReadManagedNodes() ([]config.ManagedNode, error) {
