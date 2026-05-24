@@ -300,7 +300,9 @@ export function UserPreviewPage() {
               </div>
             </div>
             <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
-              已选节点：{managedNodes.map((n) => n.name).join("、") || "无"}
+              已选节点：{(editingUser.selected_nodes || []).length > 0
+                ? managedNodes.filter((n) => (editingUser.selected_nodes || []).includes(n.id)).map((n) => n.name).join("、")
+                : "请在用户列表中勾选节点"}
             </div>
 
             {/* Available groups for this user */}
@@ -329,19 +331,22 @@ export function UserPreviewPage() {
                           <div>
                             <span style={{ fontSize: 11, color: "#94a3b8" }}>节点：</span>
                             <div className="chip-group" style={{ marginTop: 2 }}>
-                              {managedNodes.length === 0 ? (
-                                <span style={{ fontSize: 12, color: "#94a3b8" }}>请先去节点页添加节点</span>
-                              ) : (
-                                managedNodes.map((n) => {
-                                  const checked = (editGroupNodes[g.name] || []).includes(n.name);
-                                  return (
-                                    <label key={n.id} className={`chip ${checked ? "checked" : ""}`} style={{ fontSize: 12, padding: "3px 8px" }}>
-                                      <input type="checkbox" checked={checked} onChange={() => toggleGroupNode(g.name, n.name)} style={{ margin: 0 }} />
-                                      <span>{n.name}</span>
-                                    </label>
-                                  );
-                                })
-                              )}
+                              {(() => {
+                                const selectedNodes = managedNodes.filter((n) => (editingUser.selected_nodes || []).includes(n.id));
+                                return selectedNodes.length === 0 ? (
+                                  <span style={{ fontSize: 12, color: "#94a3b8" }}>请在用户列表中勾选节点</span>
+                                ) : (
+                                  selectedNodes.map((n) => {
+                                    const checked = (editGroupNodes[g.name] || []).includes(n.name);
+                                    return (
+                                      <label key={n.id} className={`chip ${checked ? "checked" : ""}`} style={{ fontSize: 12, padding: "3px 8px" }}>
+                                        <input type="checkbox" checked={checked} onChange={() => toggleGroupNode(g.name, n.name)} style={{ margin: 0 }} />
+                                        <span>{n.name}</span>
+                                      </label>
+                                    );
+                                  })
+                                );
+                              })()}
                             </div>
                           </div>
                           <div>

@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 )
 
 type dashboardSummary struct {
@@ -70,5 +71,36 @@ func registerDashboardRoutes(mux *http.ServeMux, deps Dependencies) {
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(summary)
+	}))
+	mux.HandleFunc("/api/dashboard/traffic", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+		type barItem struct {
+			ServerID   int64  `json:"server_id"`
+			ServerName string `json:"server_name"`
+			Total      int64  `json:"total"`
+		}
+		type userBars struct {
+			Email string    `json:"email"`
+			Bars  []barItem `json:"bars"`
+			Total int64     `json:"total"`
+		}
+		all := deps.DBService.LoadTraffic(r.Context())
+		result := make([]userBars, 0)
+		for email, traffic := range all {
+			u := userBars{Email: email}
+			for _, t := range traffic {
+				u.Bars = append(u.Bars, barItem{
+					ServerID:   t.ServerID,
+					ServerName: t.ServerName,
+					Total:      t.Up + t.Down,
+				})
+				u.Total += t.Up + t.Down
+			}
+			if u.Total > 0 {
+				result = append(result, u)
+			}
+		}
+		sort.Slice(result, func(i, j int) bool { return result[i].Total > result[j].Total })
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(result)
 	}))
 }
