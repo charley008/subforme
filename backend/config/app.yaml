@@ -1,8 +1,0 @@
-mode: whitelist
-cache_ttl_seconds: 60
-healthcheck_url: https://www.gstatic.com/generate_204
-healthcheck_interval_seconds: 300
-user_modes: {}
-user_nodes: {}
-user_providers: {}
-user_group_nodes: {}
