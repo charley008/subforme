@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -44,6 +45,7 @@ func registerAuthRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 		auth.SetSession(w, deps.SessionSecret)
 		log.Printf("[auth] login success username=%s remote=%s", req.Username, remoteAddr(r))
+		refreshTrafficAfterLogin(deps)
 		w.WriteHeader(http.StatusNoContent)
 	})
 
@@ -88,6 +90,19 @@ func registerAuthRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
+}
+
+func refreshTrafficAfterLogin(deps Dependencies) {
+	if deps.DBService == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		start := time.Now()
+		traffic := deps.DBService.RefreshTraffic(ctx)
+		log.Printf("[traffic] login_refresh users=%d duration=%s", len(traffic), time.Since(start).Round(time.Millisecond))
+	}()
 }
 
 type statusRecorder struct {
