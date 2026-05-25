@@ -43,7 +43,7 @@ func registerPublicRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		raw, err := deps.SubscriptionService.Generate(user)
+		raw, err := generateForRequest(deps.SubscriptionService, r, user)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -54,6 +54,13 @@ func registerPublicRoutes(mux *http.ServeMux, deps Dependencies) {
 	})
 
 	registerFrontendRoutes(mux, deps.FrontendDir)
+}
+
+func generateForRequest(service SubscriptionService, r *http.Request, user string) ([]byte, error) {
+	if svc, ok := service.(PublicBaseSubscriptionService); ok {
+		return svc.GenerateWithBaseURL(user, publicBaseURLForRequest(r))
+	}
+	return service.Generate(user)
 }
 
 func registerFrontendRoutes(mux *http.ServeMux, frontendDir string) {

@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, getText, postJSON, putJSON } from "../lib/api";
+import { getJSON, getText, putJSON } from "../lib/api";
 import type { ManagedNode, NodePreview, ProviderAddon, UserSummary } from "../lib/types";
-
-type ServerTraffic = { server_id: number; server_name: string; server_address: string; up: number; down: number };
 
 type GroupDef = {
   name: string;
@@ -29,7 +27,6 @@ export function UserPreviewPage() {
   const [providers, setProviders] = useState<ProviderAddon[]>([]);
   const [groupDefs, setGroupDefs] = useState<GroupDef[]>([]);
   const [message, setMessage] = useState("");
-  const [trafficMap, setTrafficMap] = useState<Record<string, ServerTraffic[]>>({});
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [busyUser, setBusyUser] = useState<string | null>(null);
 
@@ -39,7 +36,6 @@ export function UserPreviewPage() {
 
   useEffect(() => {
     void refresh();
-    void getJSON<Record<string, ServerTraffic[]>>("/api/traffic/load").then(setTrafficMap).catch(() => {});
   }, []);
 
   const managedNodeMap = useMemo(() => {
@@ -88,17 +84,6 @@ export function UserPreviewPage() {
       setMessage(error instanceof Error ? error.message : `更新 ${user.email} 失败`);
     } finally {
       setBusyUser(null);
-    }
-  }
-
-  async function handleRefreshTraffic() {
-    try {
-      const data = await postJSON<Record<string, ServerTraffic[]>>("/api/traffic/refresh");
-      setTrafficMap(data);
-      const count = Object.keys(data).length;
-      setMessage(`已刷新 ${count} 个用户的流量数据`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "刷新流量失败");
     }
   }
 
@@ -165,13 +150,6 @@ export function UserPreviewPage() {
     });
   }
 
-  function formatBytes(bytes: number): string {
-    if (!bytes || bytes === 0) return "0";
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + units[i];
-  }
-
   function saveGroupNodes() {
     if (!editingUser) return;
     void updatePolicy(editingUser, { group_nodes: editGroupNodes });
@@ -196,7 +174,7 @@ export function UserPreviewPage() {
       <div className="page-header">
         <h1>用户</h1>
         <div className="page-actions">
-          <button type="button" className="btn" onClick={() => void handleRefreshTraffic()}>刷新流量</button>
+
           <button type="button" className="btn" onClick={() => void refresh()}>刷新列表</button>
         </div>
       </div>
@@ -235,19 +213,13 @@ export function UserPreviewPage() {
                       {managedNodes.length === 0 ? <span style={{ color: "#94a3b8", fontSize: 12 }}>请先去节点页添加节点</span> : null}
                       {managedNodes.map((node) => {
                         const checked = (user.selected_nodes || []).includes(node.id);
-                        const userTraffic = trafficMap[user.email] || [];
-                        const nodeTraffic = userTraffic.find((t) => t.server_id === (node.server_id ?? 0));
                         return (
-                          <label key={node.id} className={`chip ${checked ? "checked" : ""}`} style={{ flexDirection: "column", alignItems: "flex-start", gap: 1, padding: "4px 8px" }}>
+                          <label key={node.id} className={`chip ${checked ? "checked" : ""}`}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                               <input type="checkbox" checked={checked} onChange={() => toggleNode(user, node.id)} disabled={busyUser === user.email} style={{ margin: 0 }} />
                               <span>{node.name}</span>
                             </div>
-                            {nodeTraffic && (
-                              <span style={{ fontSize: 10, color: "#94a3b8" }}>
-                                {formatBytes(nodeTraffic.up + nodeTraffic.down)}
-                              </span>
-                            )}
+
                           </label>
                         );
                       })}

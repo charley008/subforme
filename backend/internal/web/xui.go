@@ -47,7 +47,7 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 			http.Error(w, "subscription service unavailable", http.StatusNotImplemented)
 			return
 		}
-		raw, err := deps.SubscriptionService.Generate(user)
+		raw, err := generateForRequest(deps.SubscriptionService, r, user)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -305,5 +305,16 @@ func publicBaseURLForRequest(r *http.Request) string {
 	} else if r.TLS != nil {
 		scheme = "https"
 	}
-	return fmt.Sprintf("%s://%s", scheme, r.Host)
+	host := r.Host
+	if forwarded := r.Header.Get("X-Forwarded-Host"); forwarded != "" {
+		host = strings.TrimSpace(strings.Split(forwarded, ",")[0])
+	}
+	prefix := ""
+	if forwarded := r.Header.Get("X-Forwarded-Prefix"); forwarded != "" {
+		prefix = "/" + strings.Trim(strings.Split(forwarded, ",")[0], "/")
+		if prefix == "/" {
+			prefix = ""
+		}
+	}
+	return fmt.Sprintf("%s://%s%s", scheme, host, prefix)
 }

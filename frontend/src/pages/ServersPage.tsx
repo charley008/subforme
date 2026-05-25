@@ -27,6 +27,10 @@ type ImportResult = {
 
 type SyncResult = {
   synced: number;
+  added: number;
+  updated: number;
+  attached: number;
+  detached: number;
   deleted: number;
   server_errors?: { server: string; error: string }[];
 };
@@ -96,7 +100,7 @@ export function ServersPage() {
       const errMsg = result.server_errors?.length
         ? "\n错误: " + result.server_errors.map((e) => `${e.server}: ${e.error}`).join("; ")
         : "";
-      setMessage(`同步完成: ${result.synced} 已推送, ${result.deleted} 已删除${errMsg}`);
+      setMessage(`\u540c\u6b65\u5b8c\u6210: ${result.added} \u6dfb\u52a0, ${result.updated} \u66f4\u65b0, ${result.attached} \u5173\u8054, ${result.detached} \u53d6\u6d88\u5173\u8054, ${result.deleted} \u5220\u9664${errMsg}`);
     } catch (e: unknown) {
       setMessage("同步失败: " + (e instanceof Error ? e.message : String(e)));
     }

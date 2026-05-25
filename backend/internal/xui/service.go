@@ -217,10 +217,16 @@ type ClientParams struct {
 	Email      string
 	UUID       string
 	Password   string
+	Auth       string
 	Flow       string
+	Security   string
 	TotalGB    int64
 	ExpiryTime int64
 	LimitIP    int
+	SubID      string
+	TgID       int64
+	Reset      int
+	Comment    string
 	Enable     bool
 }
 
@@ -232,6 +238,15 @@ func BuildClientConfig(protocol string, p ClientParams) InboundClient {
 		TotalGB:    p.TotalGB,
 		ExpiryTime: p.ExpiryTime,
 		LimitIP:    p.LimitIP,
+		ID:         p.UUID,
+		Password:   p.Password,
+		Auth:       p.Auth,
+		Flow:       p.Flow,
+		Security:   p.Security,
+		SubID:      p.SubID,
+		TgID:       FlexibleInt64(p.TgID),
+		Reset:      p.Reset,
+		Comment:    p.Comment,
 	}
 	switch protocol {
 	case "vless", "vmess":
@@ -242,7 +257,7 @@ func BuildClientConfig(protocol string, p ClientParams) InboundClient {
 	case "shadowsocks":
 		c.Password = p.Password
 	case "hysteria2", "hysteria":
-		c.Password = p.Password
+		c.Auth = firstNonEmpty(p.Auth, p.Password)
 	default:
 		c.ID = p.UUID
 	}

@@ -9,6 +9,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -69,6 +70,24 @@ func (c *Client) ListInbounds(ctx context.Context) ([]InboundRecord, error) {
 	return nil, fmt.Errorf("xui list inbounds returned no candidates")
 }
 
+func (c *Client) ListClients(ctx context.Context) ([]ClientListRecord, error) {
+	if c.BaseURL == "" {
+		return nil, fmt.Errorf("xui base url is not configured")
+	}
+	var lastErr error
+	for _, endpoint := range c.clientActionCandidates("list") {
+		rows, err := c.listClientsAt(ctx, endpoint)
+		if err == nil {
+			return rows, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("xui list clients returned no candidates")
+}
+
 func (c *Client) joinURL(nextPath string) (string, error) {
 	base, err := url.Parse(c.BaseURL)
 	if err != nil {
@@ -94,6 +113,14 @@ func (c *Client) inboundActionCandidates(action string) []string {
 	)
 }
 
+func (c *Client) clientActionCandidates(action string) []string {
+	return c.candidateURLs(
+		"/panel/api/clients/"+strings.TrimLeft(action, "/"),
+		"/xui/panel/api/clients/"+strings.TrimLeft(action, "/"),
+		"/api/clients/"+strings.TrimLeft(action, "/"),
+	)
+}
+
 func (c *Client) serverActionCandidates(action string) []string {
 	return c.candidateURLs(
 		"/panel/api/server/"+strings.TrimLeft(action, "/"),
@@ -103,7 +130,7 @@ func (c *Client) serverActionCandidates(action string) []string {
 }
 
 func (c *Client) candidateURLs(paths ...string) []string {
-	candidates := make([]string, 0, 3)
+	candidates := make([]string, 0, len(paths))
 	seen := map[string]struct{}{}
 
 	add := func(p string) {
@@ -175,6 +202,90 @@ func (c *Client) listInboundsAt(ctx context.Context, endpoint string) ([]Inbound
 	}
 
 	return nil, "", fmt.Errorf("xui list inbounds at %s returned empty payload", endpoint)
+}
+
+func (c *Client) listClientsAt(ctx context.Context, endpoint string) ([]ClientListRecord, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.Do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("xui list clients at %s returned %s", endpoint, resp.Status)
+	}
+	var payload clientListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode clients response: %w", err)
+	}
+	for _, raw := range []json.RawMessage{payload.RawObj, payload.RawData} {
+		if len(raw) == 0 {
+			continue
+		}
+		var rows []ClientListRecord
+		if err := json.Unmarshal(raw, &rows); err == nil {
+			return rows, nil
+		}
+	}
+	return nil, fmt.Errorf("xui list clients at %s returned empty payload", endpoint)
+}
+
+func (c *Client) AddInbound(ctx context.Context, inbound InboundRecord) error {
+	return c.postFormCandidates(ctx, c.inboundActionCandidates("add"), inboundForm(inbound), "add inbound")
+}
+
+func (c *Client) UpdateInbound(ctx context.Context, inboundID int, inbound InboundRecord) error {
+	return c.postFormCandidates(ctx, c.inboundActionCandidates("update/"+strconv.Itoa(inboundID)), inboundForm(inbound), "update inbound")
+}
+
+func (c *Client) DeleteInbound(ctx context.Context, inboundID int) error {
+	return c.postJSONCandidates(ctx, c.inboundActionCandidates("del/"+strconv.Itoa(inboundID)), "", "delete inbound")
+}
+
+type clientBody struct {
+	Client     InboundClient `json:"client"`
+	InboundIDs []int         `json:"inboundIds,omitempty"`
+}
+
+type inboundIDsBody struct {
+	InboundIDs []int `json:"inboundIds"`
+}
+
+func (c *Client) CreateClient(ctx context.Context, client InboundClient, inboundIDs []int) error {
+	body, _ := json.Marshal(clientBody{Client: client, InboundIDs: inboundIDs})
+	return c.postJSONCandidates(ctx, c.clientActionCandidates("add"), string(body), "create client")
+}
+
+func (c *Client) UpdateClientByEmail(ctx context.Context, email string, client InboundClient) error {
+	body, _ := json.Marshal(client)
+	return c.postJSONCandidates(ctx, c.clientActionCandidates("update/"+url.PathEscape(email)), string(body), "update client")
+}
+
+func (c *Client) DeleteClientByEmailV2(ctx context.Context, email string) error {
+	return c.postJSONCandidates(ctx, c.clientActionCandidates("del/"+url.PathEscape(email)), "", "delete client")
+}
+
+func (c *Client) ResetClientTraffic(ctx context.Context, email string) error {
+	return c.postJSONCandidates(ctx, c.clientActionCandidates("resetTraffic/"+url.PathEscape(email)), "", "reset client traffic")
+}
+
+func (c *Client) AttachClient(ctx context.Context, email string, inboundIDs []int) error {
+	if len(inboundIDs) == 0 {
+		return nil
+	}
+	body, _ := json.Marshal(inboundIDsBody{InboundIDs: inboundIDs})
+	return c.postJSONCandidates(ctx, c.clientActionCandidates(url.PathEscape(email)+"/attach"), string(body), "attach client")
+}
+
+func (c *Client) DetachClient(ctx context.Context, email string, inboundIDs []int) error {
+	if len(inboundIDs) == 0 {
+		return nil
+	}
+	body, _ := json.Marshal(inboundIDsBody{InboundIDs: inboundIDs})
+	return c.postJSONCandidates(ctx, c.clientActionCandidates(url.PathEscape(email)+"/detach"), string(body), "detach client")
 }
 
 // AddClient adds one or more clients to an inbound.
@@ -276,4 +387,77 @@ func (c *Client) postJSONCandidates(ctx context.Context, endpoints []string, bod
 		return nil
 	}
 	return lastErr
+}
+
+func (c *Client) postFormCandidates(ctx context.Context, endpoints []string, values url.Values, action string) error {
+	var lastErr error
+	for _, endpoint := range endpoints {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(values.Encode()))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		resp, err := c.Do(ctx, req)
+		if err != nil {
+			return err
+		}
+		raw, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return readErr
+		}
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("%s at %s returned %s", action, endpoint, resp.Status)
+			continue
+		}
+		if len(strings.TrimSpace(string(raw))) == 0 {
+			return nil
+		}
+		var apiResp apiResponse
+		if err := json.Unmarshal(raw, &apiResp); err != nil {
+			return nil
+		}
+		if !apiResp.Success {
+			return fmt.Errorf("%s rejected: %s", action, apiResp.Msg)
+		}
+		return nil
+	}
+	return lastErr
+}
+
+func inboundForm(inbound InboundRecord) url.Values {
+	values := url.Values{}
+	values.Set("total", strconv.FormatInt(inbound.Total, 10))
+	values.Set("remark", inbound.Remark)
+	values.Set("enable", strconv.FormatBool(inbound.Enable))
+	values.Set("expiryTime", strconv.FormatInt(inbound.ExpiryTime, 10))
+	values.Set("listen", inbound.Listen)
+	values.Set("port", strconv.Itoa(inbound.Port))
+	values.Set("protocol", inbound.Protocol)
+	values.Set("settings", stripInboundClients(inbound.Settings))
+	values.Set("streamSettings", inbound.StreamSettings)
+	values.Set("tag", inbound.Tag)
+	values.Set("sniffing", inbound.Sniffing)
+	values.Set("trafficReset", inbound.TrafficReset)
+	return values
+}
+
+func stripInboundClients(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return raw
+	}
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return raw
+	}
+	if _, ok := settings["clients"]; !ok {
+		return raw
+	}
+	settings["clients"] = []any{}
+	b, err := json.Marshal(settings)
+	if err != nil {
+		return raw
+	}
+	return string(b)
 }

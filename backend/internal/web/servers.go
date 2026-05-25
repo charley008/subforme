@@ -24,6 +24,7 @@ func registerDBRoutes(mux *http.ServeMux, deps Dependencies) {
 	mux.HandleFunc("/api/sync", requireSession(deps.SessionSecret, handleSync(deps)))
 	mux.HandleFunc("/api/traffic/refresh", requireSession(deps.SessionSecret, handleTrafficRefresh(deps)))
 	mux.HandleFunc("/api/traffic/load", requireSession(deps.SessionSecret, handleTrafficLoad(deps)))
+	mux.HandleFunc("/api/traffic/reset-server/", requireSession(deps.SessionSecret, handleTrafficResetServer(deps)))
 
 	// Server test connection
 	mux.HandleFunc("/api/servers/test/", requireSession(deps.SessionSecret, handleServerTest(deps)))
@@ -325,6 +326,26 @@ func handleTrafficRefresh(deps Dependencies) http.HandlerFunc {
 	}
 }
 
+func handleTrafficResetServer(deps Dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		id, err := extractID(r.URL.Path, "/api/traffic/reset-server/")
+		if err != nil {
+			writeError(w, "invalid server id")
+			return
+		}
+		result, err := deps.DBService.ResetServerUserTraffic(r.Context(), id)
+		if err != nil {
+			writeError(w, err.Error())
+			return
+		}
+		writeJSON(w, result)
+	}
+}
+
 func xuiBaseURL(sv *db.Server) string {
 	base := strings.TrimRight(sv.BasePath, "/")
 	return sv.Scheme + "://" + sv.Host + ":" + strconv.Itoa(sv.Port) + base
@@ -340,5 +361,3 @@ func writeError(w http.ResponseWriter, msg string) {
 	w.WriteHeader(http.StatusBadRequest)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
-
-

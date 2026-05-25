@@ -16,6 +16,18 @@ type stubXUIService struct {
 	err    error
 }
 
+func TestPublicBaseURLForRequestUsesForwardedPrefix(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/sub?user=alice", nil)
+	req.Host = "127.0.0.1:8080"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "www.4738.org")
+	req.Header.Set("X-Forwarded-Prefix", "/sub")
+
+	if got := publicBaseURLForRequest(req); got != "https://www.4738.org/sub" {
+		t.Fatalf("unexpected public base URL: %s", got)
+	}
+}
+
 func (s stubXUIService) TestConnection(ctx context.Context) (xui.ConnectionStatus, error) {
 	return s.status, s.err
 }

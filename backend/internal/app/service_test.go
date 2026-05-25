@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -14,6 +15,52 @@ func TestGenerateReturnsErrorWhenUserMissing(t *testing.T) {
 	_, err := svc.Generate("charley")
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestUpsertClientInSettingsPreservesInboundSettings(t *testing.T) {
+	raw := `{"clients":[{"email":"alice","id":"uuid-1"}],"decryption":"none","testseed":[900,500]}`
+	got := upsertClientInSettings(raw, xui.InboundClient{Email: "bob", ID: "uuid-2", Enable: true})
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
+		t.Fatalf("settings json is invalid: %v", err)
+	}
+	if decoded["decryption"] != "none" {
+		t.Fatalf("expected decryption to be preserved, got %#v", decoded)
+	}
+	clients, ok := decoded["clients"].([]any)
+	if !ok || len(clients) != 2 {
+		t.Fatalf("expected two clients, got %#v", decoded["clients"])
+	}
+}
+
+func TestSameRemoteClientIgnoresEnable(t *testing.T) {
+	existing := xui.ClientListRecord{Email: "alice", UUID: "uuid-1", Password: "pass", Auth: "auth", Flow: "flow", SubID: "sub", Enable: false}
+	desired := xui.InboundClient{Email: "alice", ID: "uuid-1", Password: "pass", Auth: "auth", Flow: "flow", SubID: "sub", Enable: true}
+	if !sameRemoteClient(existing, desired) {
+		t.Fatal("expected enable mismatch to be ignored")
+	}
+}
+
+func TestRemoveClientFromSettingsPreservesInboundSettings(t *testing.T) {
+	raw := `{"clients":[{"email":"alice","id":"uuid-1"},{"email":"bob","id":"uuid-2"}],"encryption":"none"}`
+	got := removeClientFromSettings(raw, "alice")
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
+		t.Fatalf("settings json is invalid: %v", err)
+	}
+	if decoded["encryption"] != "none" {
+		t.Fatalf("expected encryption to be preserved, got %#v", decoded)
+	}
+	clients, ok := decoded["clients"].([]any)
+	if !ok || len(clients) != 1 {
+		t.Fatalf("expected one remaining client, got %#v", decoded["clients"])
+	}
+	remaining := clients[0].(map[string]any)
+	if remaining["email"] != "bob" {
+		t.Fatalf("expected bob to remain, got %#v", remaining)
 	}
 }
 
@@ -139,6 +186,55 @@ func TestGenerateUsesFirstSelectGroupWhenGroupNameProxyIsEmpty(t *testing.T) {
 	got := string(raw)
 	if !strings.Contains(got, "name: PROXY") || !strings.Contains(got, "- airport") {
 		t.Fatalf("expected provider to be attached to PROXY, got %s", got)
+	}
+}
+
+func TestGenerateWithBaseURLRewritesProviderURL(t *testing.T) {
+	tmp := t.TempDir()
+	if err := config.SaveProviders(tmp, []config.ProviderAddon{{
+		ID:   "airport",
+		Name: "airport",
+		ProxyProviders: map[string]any{"airport": map[string]any{
+			"type": "http",
+			"url":  "http://127.0.0.1:8080/api/proxy-providers/airport.yaml",
+		}},
+	}}); err != nil {
+		t.Fatalf("save providers: %v", err)
+	}
+
+	svc := Service{
+		ConfigDir: tmp,
+		Loader: func(dir string) (config.Bundle, error) {
+			return config.Bundle{
+				App: config.AppConfig{
+					Mode:          "whitelist",
+					UserProviders: map[string][]string{"alice": {"airport"}},
+				},
+				BaseWhitelist: config.BaseConfig{Rules: []string{"MATCH,DIRECT"}},
+				BaseBlacklist: config.BaseConfig{Rules: []string{"MATCH,PROXY"}},
+				Groups: config.GroupConfig{Groups: []config.GroupDef{
+					{Name: "PROXY", Type: "select"},
+				}},
+			}, nil
+		},
+		ResolverFactory: func(cfg config.XUIConfig) XUIResolver {
+			return fakeResolver{nodes: []xui.Node{{Name: "node-a", Type: "vless", Server: "example.com", Port: 443, UUID: "uuid"}}}
+		},
+		TemplateLoader: func(dir, mode string) (string, error) {
+			return "proxies: []\nproxy-groups: []\nproxy-providers: {}\nrules:\n  - MATCH,DIRECT\n", nil
+		},
+	}
+
+	raw, err := svc.GenerateWithBaseURL("alice", "https://sub.4738.org")
+	if err != nil {
+		t.Fatalf("GenerateWithBaseURL returned error: %v", err)
+	}
+	got := string(raw)
+	if strings.Contains(got, "127.0.0.1") {
+		t.Fatalf("provider URL still contains localhost: %s", got)
+	}
+	if !strings.Contains(got, "https://sub.4738.org/api/proxy-providers/airport.yaml") {
+		t.Fatalf("provider URL was not rewritten: %s", got)
 	}
 }
 
