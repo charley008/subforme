@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"subforme/backend/pkg/yamlx"
 
@@ -84,6 +85,7 @@ func SaveTemplateSectionYAML(dir, section, raw string) error {
 	if err := ensureTemplateLayout(dir); err != nil {
 		return err
 	}
+	raw = normalizeYAMLText(raw)
 	if _, err := yamlx.Parse(raw); err != nil {
 		return fmt.Errorf("解析 %s.yaml 失败: %w", section, err)
 	}
@@ -95,6 +97,11 @@ func SaveTemplateSectionYAML(dir, section, raw string) error {
 		return err
 	}
 	return ensureTemplateLayout(dir)
+}
+
+func normalizeYAMLText(raw string) string {
+	raw = strings.ReplaceAll(raw, "\r\n", "\n")
+	return strings.ReplaceAll(raw, "\r", "\n")
 }
 
 func LoadModeTemplateYAML(dir, mode string) (string, error) {
