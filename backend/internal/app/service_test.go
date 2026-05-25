@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -14,6 +15,44 @@ func TestGenerateReturnsErrorWhenUserMissing(t *testing.T) {
 	_, err := svc.Generate("charley")
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestUpsertClientInSettingsPreservesInboundSettings(t *testing.T) {
+	raw := `{"clients":[{"email":"alice","id":"uuid-1"}],"decryption":"none","testseed":[900,500]}`
+	got := upsertClientInSettings(raw, xui.InboundClient{Email: "bob", ID: "uuid-2", Enable: true})
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
+		t.Fatalf("settings json is invalid: %v", err)
+	}
+	if decoded["decryption"] != "none" {
+		t.Fatalf("expected decryption to be preserved, got %#v", decoded)
+	}
+	clients, ok := decoded["clients"].([]any)
+	if !ok || len(clients) != 2 {
+		t.Fatalf("expected two clients, got %#v", decoded["clients"])
+	}
+}
+
+func TestRemoveClientFromSettingsPreservesInboundSettings(t *testing.T) {
+	raw := `{"clients":[{"email":"alice","id":"uuid-1"},{"email":"bob","id":"uuid-2"}],"encryption":"none"}`
+	got := removeClientFromSettings(raw, "alice")
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
+		t.Fatalf("settings json is invalid: %v", err)
+	}
+	if decoded["encryption"] != "none" {
+		t.Fatalf("expected encryption to be preserved, got %#v", decoded)
+	}
+	clients, ok := decoded["clients"].([]any)
+	if !ok || len(clients) != 1 {
+		t.Fatalf("expected one remaining client, got %#v", decoded["clients"])
+	}
+	remaining := clients[0].(map[string]any)
+	if remaining["email"] != "bob" {
+		t.Fatalf("expected bob to remain, got %#v", remaining)
 	}
 }
 

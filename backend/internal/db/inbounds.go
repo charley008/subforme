@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -108,8 +109,8 @@ func (s *Store) FindInboundsByServerAndProtocol(serverID int64, protocol string)
 	return out, rows.Err()
 }
 
-// EnsureServerInbounds syncs inbounds from 3x-ui into local cache.
-// It deletes old inbounds for the server and inserts current ones.
+// EnsureServerInbounds syncs inbounds from 3x-ui into local cache while keeping
+// existing local inbound row IDs stable for user_assignments.
 func (s *Store) EnsureServerInbounds(serverID int64, inbounds []Inbound) error {
 	tx, err := s.DB.Begin()
 	if err != nil {
@@ -117,25 +118,66 @@ func (s *Store) EnsureServerInbounds(serverID int64, inbounds []Inbound) error {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec("DELETE FROM inbounds WHERE server_id = ?", serverID); err != nil {
-		return err
-	}
-
 	now := time.Now().Unix()
+	seen := make([]string, 0, len(inbounds))
 	for _, in := range inbounds {
 		in.ServerID = serverID
 		in.UpdatedAt = now
+		seen = append(seen, fmt.Sprint(in.InboundID))
 		_, err := tx.Exec(`
 			INSERT INTO inbounds (server_id, inbound_id, remark, port, protocol,
 			                      settings_json, stream_settings_json, sniffing_json,
 			                      tag, enable, traffic_json, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(server_id, inbound_id) DO UPDATE SET
+				remark=excluded.remark,
+				port=excluded.port,
+				protocol=excluded.protocol,
+				settings_json=excluded.settings_json,
+				stream_settings_json=excluded.stream_settings_json,
+				sniffing_json=excluded.sniffing_json,
+				tag=excluded.tag,
+				enable=excluded.enable,
+				traffic_json=excluded.traffic_json,
+				updated_at=excluded.updated_at
 		`, in.ServerID, in.InboundID, in.Remark, in.Port, in.Protocol,
 			in.SettingsJSON, in.StreamSettingsJSON, in.SniffingJSON,
 			in.Tag, boolToInt(in.Enable), in.TrafficJSON, in.UpdatedAt)
 		if err != nil {
 			return fmt.Errorf("insert inbound: %w", err)
 		}
+	}
+	if len(seen) == 0 {
+		if _, err := tx.Exec(`
+			DELETE FROM user_assignments
+			WHERE inbound_id IN (SELECT id FROM inbounds WHERE server_id = ?)
+		`, serverID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec("DELETE FROM inbounds WHERE server_id = ?", serverID); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(seen)), ",")
+	args := make([]any, 0, len(seen)+1)
+	args = append(args, serverID)
+	for _, id := range seen {
+		args = append(args, id)
+	}
+	if _, err := tx.Exec(fmt.Sprintf(`
+		DELETE FROM user_assignments
+		WHERE inbound_id IN (
+			SELECT id FROM inbounds WHERE server_id = ? AND inbound_id NOT IN (%s)
+		)
+	`, placeholders), args...); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(fmt.Sprintf(`
+		DELETE FROM inbounds WHERE server_id = ? AND inbound_id NOT IN (%s)
+	`, placeholders), args...); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

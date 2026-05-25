@@ -775,28 +775,13 @@ func (s Service) ImportFromServer(ctx context.Context, serverID int64) (*ImportR
 	}
 	log.Printf("[import] got %d inbounds, %d users in DB before import", len(inbounds), len(beforeEmails))
 
-	var cachedInbounds []db.Inbound
-	for _, inb := range inbounds {
-		trafficJSON := ""
-		if len(inb.ClientStats) > 0 {
-			if b, err := json.Marshal(inb.ClientStats); err == nil {
-				trafficJSON = string(b)
-			}
-		}
-		cachedInbounds = append(cachedInbounds, db.Inbound{
-			InboundID:          int(inb.ID),
-			Remark:             inb.Remark,
-			Port:               inb.Port,
-			Protocol:           inb.Protocol,
-			SettingsJSON:       inb.Settings,
-			StreamSettingsJSON: inb.StreamSettings,
-			SniffingJSON:       inb.Sniffing,
-			Enable:             inb.Enable,
-			TrafficJSON:        trafficJSON,
-		})
-	}
-	if err := s.DB.EnsureServerInbounds(serverID, cachedInbounds); err != nil {
+	cachedList, err := s.cacheServerInbounds(serverID, inbounds)
+	if err != nil {
 		return nil, fmt.Errorf("cache inbounds: %w", err)
+	}
+	cachedByAPIID := inboundsByAPIID(cachedList)
+	if err := s.DB.DeleteAssignmentsByServer(serverID); err != nil {
+		return nil, fmt.Errorf("clear assignments: %w", err)
 	}
 
 	seen := map[string]*db.User{}
@@ -858,21 +843,14 @@ func (s Service) ImportFromServer(ctx context.Context, serverID int64) (*ImportR
 			}
 			for _, cl := range settings.Clients {
 				if cl.Email == email {
-					cachedList, err := s.DB.ListInboundsByServer(serverID)
-					if err != nil {
-						continue
-					}
-					for _, ci := range cachedList {
-						if ci.InboundID == int(inb.ID) {
-							s.DB.CreateAssignment(&db.UserAssignment{
-								UserID:        u.ID,
-								ServerID:      serverID,
-								InboundID:     ci.ID,
-								EmailOnServer: email,
-								Enable:        cl.Enable,
-							})
-							break
-						}
+					if ci, ok := cachedByAPIID[int(inb.ID)]; ok {
+						s.DB.CreateAssignment(&db.UserAssignment{
+							UserID:        u.ID,
+							ServerID:      serverID,
+							InboundID:     ci.ID,
+							EmailOnServer: email,
+							Enable:        cl.Enable,
+						})
 					}
 				}
 			}
@@ -955,6 +933,13 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 			continue
 		}
 		log.Printf("[sync] %s: %d inbounds", sv.Name, len(existingInbounds))
+		inbounds, err := s.cacheServerInbounds(sv.ID, existingInbounds)
+		if err != nil {
+			log.Printf("[sync] cache inbounds for %s: %v", sv.Name, err)
+			result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: err.Error()})
+			continue
+		}
+		cachedByAPIID := inboundsByAPIID(inbounds)
 
 		existingEmails := map[string]bool{}
 		for _, inb := range existingInbounds {
@@ -967,30 +952,35 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 			}
 		}
 		log.Printf("[sync] %s: %d existing users", sv.Name, len(existingEmails))
-
-		// Get or fetch inbounds for this server
-		inbounds, err := s.DB.ListInboundsByServer(sv.ID)
-		if err != nil || len(inbounds) == 0 {
-			fresh, err := cli.ListInbounds(ctx)
-			if err != nil {
-				log.Printf("[sync] fetch inbounds for %s: %v", sv.Name, err)
+		if err := s.DB.DeleteAssignmentsByServer(sv.ID); err != nil {
+			log.Printf("[sync] clear assignments for %s: %v", sv.Name, err)
+		}
+		localByEmail := map[string]db.User{}
+		for _, u := range users {
+			localByEmail[u.Email] = u
+		}
+		for _, inb := range existingInbounds {
+			cached, ok := cachedByAPIID[int(inb.ID)]
+			if !ok {
 				continue
 			}
-			var cached []db.Inbound
-			for _, inb := range fresh {
-				cached = append(cached, db.Inbound{
-					InboundID:          int(inb.ID),
-					Remark:             inb.Remark,
-					Port:               inb.Port,
-					Protocol:           inb.Protocol,
-					SettingsJSON:       inb.Settings,
-					StreamSettingsJSON: inb.StreamSettings,
-					SniffingJSON:       inb.Sniffing,
-					Enable:             inb.Enable,
+			settings, ok := xui.ParseInboundSettings(inb.Settings)
+			if !ok {
+				continue
+			}
+			for _, cl := range settings.Clients {
+				u, ok := localByEmail[cl.Email]
+				if !ok {
+					continue
+				}
+				_ = s.DB.CreateAssignment(&db.UserAssignment{
+					UserID:        u.ID,
+					ServerID:      sv.ID,
+					InboundID:     cached.ID,
+					EmailOnServer: cl.Email,
+					Enable:        cl.Enable,
 				})
 			}
-			s.DB.EnsureServerInbounds(sv.ID, cached)
-			inbounds = cached
 		}
 
 		for _, u := range users {
@@ -1016,6 +1006,7 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 						result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("add %s: %v", u.Email, err)})
 						continue
 					}
+					s.DB.UpdateInboundClientsJSON(inb.ID, upsertClientInSettings(inb.SettingsJSON, cc))
 					log.Printf("[sync] %s added to %s inbound %d", u.Email, sv.Name, inb.InboundID)
 					result.Synced++
 					matched = true
@@ -1040,7 +1031,7 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 					continue
 				}
 				log.Printf("[sync] %s added to %s inbound %d", u.Email, sv.Name, inb.InboundID)
-				s.DB.UpdateInboundClientsJSON(inb.ID, string(raw))
+				s.DB.UpdateInboundClientsJSON(inb.ID, upsertClientInSettings(inb.SettingsJSON, cc))
 				if assignee, _ := s.DB.GetUserByEmail(u.Email); assignee != nil {
 					s.DB.CreateAssignment(&db.UserAssignment{
 						UserID: assignee.ID, ServerID: sv.ID, InboundID: inb.ID,
@@ -1064,8 +1055,13 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 			log.Printf("[sync] deleting %s from %s", email, sv.Name)
 			result.Deleted++
 			for _, inb := range existingInbounds {
-				cli.DeleteClientByEmail(ctx, int(inb.ID), email)
-				s.DB.UpdateInboundClientsJSON(inb.ID, inb.Settings)
+				if err := cli.DeleteClientByEmail(ctx, int(inb.ID), email); err != nil {
+					log.Printf("[sync] delete %s from %s inbound %d failed: %v", email, sv.Name, inb.ID, err)
+					continue
+				}
+				if cached, ok := cachedByAPIID[int(inb.ID)]; ok {
+					s.DB.UpdateInboundClientsJSON(cached.ID, removeClientFromSettings(cached.SettingsJSON, email))
+				}
 			}
 		}
 	}
@@ -1088,6 +1084,105 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 }
 
 // ─── Preview & Generate helpers ─────────────────────────────────────
+
+func (s Service) cacheServerInbounds(serverID int64, inbounds []xui.InboundRecord) ([]db.Inbound, error) {
+	cached := make([]db.Inbound, 0, len(inbounds))
+	for _, inb := range inbounds {
+		trafficJSON := ""
+		if len(inb.ClientStats) > 0 {
+			if b, err := json.Marshal(inb.ClientStats); err == nil {
+				trafficJSON = string(b)
+			}
+		}
+		cached = append(cached, db.Inbound{
+			InboundID:          int(inb.ID),
+			Remark:             inb.Remark,
+			Port:               inb.Port,
+			Protocol:           inb.Protocol,
+			SettingsJSON:       inb.Settings,
+			StreamSettingsJSON: inb.StreamSettings,
+			SniffingJSON:       inb.Sniffing,
+			Enable:             inb.Enable,
+			TrafficJSON:        trafficJSON,
+		})
+	}
+	if err := s.DB.EnsureServerInbounds(serverID, cached); err != nil {
+		return nil, err
+	}
+	return s.DB.ListInboundsByServer(serverID)
+}
+
+func inboundsByAPIID(inbounds []db.Inbound) map[int]db.Inbound {
+	out := make(map[int]db.Inbound, len(inbounds))
+	for _, inb := range inbounds {
+		out[inb.InboundID] = inb
+	}
+	return out
+}
+
+func upsertClientInSettings(raw string, client xui.InboundClient) string {
+	settings := map[string]any{}
+	_ = json.Unmarshal([]byte(raw), &settings)
+	clients := decodeInboundClients(settings["clients"])
+	replaced := false
+	for i := range clients {
+		if sameClient(clients[i], client) {
+			clients[i] = client
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		clients = append(clients, client)
+	}
+	settings["clients"] = clients
+	if b, err := json.Marshal(settings); err == nil {
+		return string(b)
+	}
+	return raw
+}
+
+func removeClientFromSettings(raw, email string) string {
+	settings := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return raw
+	}
+	clients := decodeInboundClients(settings["clients"])
+	filtered := clients[:0]
+	for _, client := range clients {
+		if !strings.EqualFold(client.Email, email) {
+			filtered = append(filtered, client)
+		}
+	}
+	settings["clients"] = filtered
+	if b, err := json.Marshal(settings); err == nil {
+		return string(b)
+	}
+	return raw
+}
+
+func decodeInboundClients(raw any) []xui.InboundClient {
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var clients []xui.InboundClient
+	_ = json.Unmarshal(data, &clients)
+	return clients
+}
+
+func sameClient(a, b xui.InboundClient) bool {
+	if a.Email != "" && b.Email != "" && strings.EqualFold(a.Email, b.Email) {
+		return true
+	}
+	if a.ID != "" && b.ID != "" && a.ID == b.ID {
+		return true
+	}
+	if a.Password != "" && b.Password != "" && a.Password == b.Password {
+		return true
+	}
+	return false
+}
 
 func (s Service) dbResolveUserNodes(email string) ([]xui.Node, error) {
 	user, err := s.DB.GetUserByEmail(email)
