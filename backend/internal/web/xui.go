@@ -148,56 +148,6 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
 	}))
-	mux.HandleFunc("/api/users/mode", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if deps.ConfigService == nil {
-			http.Error(w, "config service unavailable", http.StatusNotImplemented)
-			return
-		}
-		var req userModeRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid json", http.StatusBadRequest)
-			return
-		}
-		if req.User == "" {
-			http.Error(w, "missing user", http.StatusBadRequest)
-			return
-		}
-		if req.Mode != "whitelist" && req.Mode != "blacklist" {
-			http.Error(w, "invalid mode", http.StatusBadRequest)
-			return
-		}
-
-		appConfig, err := deps.ConfigService.ReadAppConfig()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		if appConfig.UserModes == nil {
-			appConfig.UserModes = map[string]string{}
-		}
-		appConfig.UserModes[req.User] = req.Mode
-		if len(req.Nodes) > 0 {
-			if appConfig.UserNodes == nil {
-				appConfig.UserNodes = map[string][]string{}
-			}
-			appConfig.UserNodes[req.User] = req.Nodes
-		}
-		if len(req.Providers) > 0 {
-			if appConfig.UserProviders == nil {
-				appConfig.UserProviders = map[string][]string{}
-			}
-			appConfig.UserProviders[req.User] = req.Providers
-		}
-		if err := deps.ConfigService.UpdateAppConfig(appConfig); err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
 	mux.HandleFunc("/api/users/policy", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

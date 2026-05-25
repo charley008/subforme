@@ -90,7 +90,7 @@ export function XuiSettingsPage() {
         <div className="form-grid">
           <div className="form-group">
             <label>当前账号</label>
-            <input value={adminUser} disabled style={{ background: "#f1f5f9", color: "#475569" }} />
+            <input value={adminUser} disabled />
           </div>
           <div className="form-group">
             <label>新密码</label>

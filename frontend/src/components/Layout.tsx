@@ -4,20 +4,36 @@ import { getJSON, postJSON } from "../lib/api";
 import type { AuthStatus } from "../lib/types";
 
 const navItems = [
-  { to: "/", label: "概览", icon: "📊", end: true },
-  { to: "/settings", label: "设置", icon: "⚙️" },
-  { to: "/users", label: "用户", icon: "👥" },
-  { to: "/nodes", label: "节点", icon: "🖥️" },
-  { to: "/servers", label: "服务器", icon: "🌐" },
-  { to: "/groups", label: "代理分组", icon: "🔀" },
-  { to: "/providers", label: "第三方 Providers", icon: "📡" },
-  { to: "/templates", label: "模板", icon: "📄" },
+  { to: "/", label: "概览", end: true },
+  { to: "/settings", label: "设置" },
+  { to: "/users", label: "用户" },
+  { to: "/nodes", label: "节点" },
+  { to: "/servers", label: "服务器" },
+  { to: "/groups", label: "代理分组" },
+  { to: "/providers", label: "第三方 Providers" },
+  { to: "/templates", label: "模板" },
 ];
+
+type ThemeMode = "light" | "dark";
+
+function initialTheme(): ThemeMode {
+  const saved = localStorage.getItem("subforme-theme");
+  if (saved === "light" || saved === "dark") {
+    return saved;
+  }
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 export function Layout() {
   const navigate = useNavigate();
   const [authChecked, setAuthChecked] = useState(false);
   const [version, setVersion] = useState("");
+  const [theme, setTheme] = useState<ThemeMode>(() => initialTheme());
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("subforme-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     void getJSON<AuthStatus>("/api/auth/me")
@@ -64,15 +80,16 @@ export function Layout() {
         <nav className="sidebar-nav">
           {navItems.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end}>
-              <span className="nav-icon">{item.icon}</span>
               <span className="nav-label">{item.label}</span>
             </NavLink>
           ))}
         </nav>
         <div className="sidebar-footer">
-          <div style={{ padding: "4px 14px 8px", fontSize: 11, color: "#475569" }}>{version}</div>
+          <button className="sidebar-theme" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+            <span className="nav-label">{theme === "dark" ? "浅色模式" : "深色模式"}</span>
+          </button>
+          <div className="sidebar-version">{version}</div>
           <button className="sidebar-logout" type="button" onClick={() => void handleLogout()}>
-            <span className="nav-icon">🚪</span>
             <span className="nav-label">退出</span>
           </button>
         </div>

@@ -29,8 +29,6 @@ type ConfigService interface {
 	UpdateAppConfig(next config.AppConfig) error
 	ReadGroupsConfig() (config.GroupConfig, error)
 	UpdateGroupsConfig(next config.GroupConfig) error
-	ReadBaseYAML(mode string) (string, error)
-	UpdateBaseYAML(mode, raw string) error
 	ReadTemplateSectionYAML(section string) (string, error)
 	UpdateTemplateSectionYAML(section, raw string) error
 	ReadManagedNodes() ([]config.ManagedNode, error)

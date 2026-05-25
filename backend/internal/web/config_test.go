@@ -13,7 +13,6 @@ import (
 type stubConfigService struct {
 	app       config.AppConfig
 	groups    config.GroupConfig
-	baseYML   string
 	templates map[string]string
 	nodes     []config.ManagedNode
 	providers []config.ProviderAddon
@@ -35,14 +34,6 @@ func (s stubConfigService) ReadGroupsConfig() (config.GroupConfig, error) {
 
 func (s stubConfigService) UpdateGroupsConfig(next config.GroupConfig) error {
 	s.groups = next
-	return s.err
-}
-
-func (s stubConfigService) ReadBaseYAML(mode string) (string, error) {
-	return s.baseYML, s.err
-}
-
-func (s stubConfigService) UpdateBaseYAML(mode, raw string) error {
 	return s.err
 }
 
@@ -139,27 +130,6 @@ func TestGetGroupsConfigReturnsJSON(t *testing.T) {
 	}
 	if rec.Header().Get("Content-Type") != "application/json" {
 		t.Fatalf("expected json content type")
-	}
-}
-
-func TestGetBaseConfigReturnsYAML(t *testing.T) {
-	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
-		ConfigService: stubConfigService{
-			baseYML: "rules:\n  - MATCH,DIRECT\n",
-		},
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/config/base?mode=whitelist", nil)
-	addSessionCookie(req)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "MATCH,DIRECT") {
-		t.Fatalf("expected yaml response, got %s", rec.Body.String())
 	}
 }
 

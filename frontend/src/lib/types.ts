@@ -32,16 +32,6 @@ export type AuthStatus = {
   admin_username?: string;
 };
 
-export type BaseConfig = {
-  "mixed-port"?: number;
-  "allow-lan"?: boolean;
-  mode?: string;
-  "log-level"?: string;
-  proxies: unknown[];
-  "proxy-groups": unknown[];
-  rules: string[];
-};
-
 export type GroupConfig = {
   healthcheck: {
     url: string;

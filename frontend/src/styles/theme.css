@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --primary: #6366f1;
   --primary-light: #818cf8;
   --primary-dark: #4f46e5;
@@ -32,6 +33,39 @@
   --radius-lg: 12px;
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --primary: #818cf8;
+  --primary-light: #a5b4fc;
+  --primary-dark: #6366f1;
+  --primary-bg: #1e1b4b;
+  --success: #34d399;
+  --success-bg: #064e3b;
+  --warning: #fbbf24;
+  --warning-bg: #451a03;
+  --danger: #f87171;
+  --danger-bg: #450a0a;
+  --gray-50: #111827;
+  --gray-100: #0f172a;
+  --gray-200: #1e293b;
+  --gray-300: #334155;
+  --gray-400: #64748b;
+  --gray-500: #94a3b8;
+  --gray-600: #cbd5e1;
+  --gray-700: #e2e8f0;
+  --gray-800: #f1f5f9;
+  --gray-900: #f8fafc;
+  --white: #111827;
+  --sidebar-bg: #020617;
+  --sidebar-text: #94a3b8;
+  --sidebar-active: #4f46e5;
+  --sidebar-hover: #111827;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.45), 0 1px 2px -1px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 8px 20px -12px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 24px 44px -22px rgba(0, 0, 0, 0.8);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -56,6 +90,18 @@ a:hover { color: var(--primary-dark); }
 
 button, input, select, textarea {
   font: inherit;
+}
+
+input, select, textarea {
+  color: var(--gray-900);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  background: var(--gray-50);
+  color: var(--gray-500);
+  opacity: 1;
 }
 
 /* ===== App Shell ===== */
@@ -86,7 +132,7 @@ button, input, select, textarea {
 .sidebar-logo {
   font-size: 18px;
   font-weight: 700;
-  color: var(--white);
+  color: #ffffff;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -112,11 +158,11 @@ button, input, select, textarea {
   gap: 2px;
 }
 
-.sidebar-nav a, .sidebar-logout {
+.sidebar-nav a, .sidebar-logout, .sidebar-theme {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 0;
+  padding: 10px 18px;
   border-radius: var(--radius);
   color: var(--sidebar-text);
   text-decoration: none;
@@ -130,29 +176,26 @@ button, input, select, textarea {
   text-align: left;
 }
 
-.sidebar-nav a:hover, .sidebar-logout:hover {
+.sidebar-nav a:hover, .sidebar-logout:hover, .sidebar-theme:hover {
   background: var(--sidebar-hover);
-  color: var(--gray-200);
+  color: #ffffff;
 }
 
 .sidebar-nav a.active {
   background: var(--primary);
-  color: var(--white);
-}
-
-.sidebar-nav a .nav-icon, .sidebar-logout .nav-icon {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  flex-shrink: 0;
+  color: #ffffff;
 }
 
 .sidebar-footer {
   padding: 12px 8px;
   border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.sidebar-version {
+  padding: 4px 14px 8px;
+  font-size: 11px;
+  color: var(--sidebar-text);
+  opacity: 0.75;
 }
 
 /* ===== Main Content ===== */
@@ -221,7 +264,7 @@ button, input, select, textarea {
 
 .btn-primary {
   background: var(--primary);
-  color: var(--white);
+  color: #ffffff;
   border-color: var(--primary);
 }
 
@@ -466,7 +509,7 @@ table.modern-table {
   width: 16px;
   left: 2px;
   bottom: 2px;
-  background: white;
+  background: #ffffff;
   border-radius: 50%;
   transition: 0.2s;
 }
@@ -504,7 +547,7 @@ table.modern-table {
 
 .tab:hover {
   color: var(--gray-900);
-  background: rgba(255,255,255,0.7);
+  background: color-mix(in srgb, var(--white) 75%, transparent);
 }
 
 .tab.active {
@@ -547,6 +590,27 @@ table.modern-table {
 
 .chip input[type="checkbox"] {
   accent-color: var(--primary);
+}
+
+:root[data-theme="dark"] .chip {
+  background: #111827;
+  border-color: #243249;
+  color: var(--gray-600);
+}
+
+:root[data-theme="dark"] .chip:hover {
+  background: #172033;
+  border-color: #475569;
+}
+
+:root[data-theme="dark"] .chip.checked {
+  background: #064e3b;
+  border-color: #10b981;
+  color: #d1fae5;
+}
+
+:root[data-theme="dark"] .chip input[type="checkbox"] {
+  accent-color: #10b981;
 }
 
 /* ===== Note / Message ===== */
@@ -631,6 +695,79 @@ table.modern-table {
   font-size: 14px;
 }
 
+/* ===== Login ===== */
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--primary) 28%, transparent), transparent 35%),
+    linear-gradient(135deg, var(--sidebar-bg), var(--gray-100));
+  padding: 24px;
+}
+
+.login-card {
+  width: min(400px, 100%);
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.login-header {
+  padding: 32px 32px 0;
+  text-align: center;
+}
+
+.login-logo {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--primary), #a78bfa);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: #ffffff;
+  font-weight: 700;
+  margin: 0 auto 16px;
+}
+
+.login-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin: 0 0 4px;
+}
+
+.login-header p {
+  font-size: 14px;
+  color: var(--gray-500);
+  margin: 0 0 24px;
+}
+
+.login-body {
+  padding: 0 32px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-submit {
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.login-message {
+  font-size: 13px;
+  color: var(--gray-500);
+  text-align: center;
+  margin: 0;
+}
+
 /* ===== Status badges ===== */
 .badge {
   display: inline-flex;
@@ -644,17 +781,17 @@ table.modern-table {
 
 .badge-success {
   background: var(--success-bg);
-  color: #065f46;
+  color: var(--success);
 }
 
 .badge-warning {
   background: var(--warning-bg);
-  color: #92400e;
+  color: var(--warning);
 }
 
 .badge-danger {
   background: var(--danger-bg);
-  color: #991b1b;
+  color: var(--danger);
 }
 
 /* ===== Empty state ===== */
@@ -681,7 +818,7 @@ table.modern-table {
     padding: 8px 4px;
     align-items: center;
   }
-  .sidebar-nav a, .sidebar-logout {
+  .sidebar-nav a, .sidebar-logout, .sidebar-theme {
     justify-content: center;
     padding: 10px;
   }

@@ -13,7 +13,7 @@ const sections: { key: TemplateSection; label: string; endpoint: string }[] = [
 export function TemplatesPage() {
   const [activeKey, setActiveKey] = useState<TemplateSection>("base");
   const [values, setValues] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState("基础就是完整 config.yaml 去掉动态部分后的公共配置。");
+  const [message, setMessage] = useState("基础是完整 config.yaml 去掉动态部分后的公共配置。");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -23,12 +23,14 @@ export function TemplatesPage() {
   async function loadAll() {
     try {
       const results = await Promise.all(
-        sections.map((s) =>
-          getText(s.endpoint).catch(() => `# ${s.label} 加载失败\n`),
+        sections.map((section) =>
+          getText(section.endpoint).catch(() => `# ${section.label} 加载失败\n`),
         ),
       );
       const map: Record<string, string> = {};
-      sections.forEach((s, i) => { map[s.key] = results[i]; });
+      sections.forEach((section, index) => {
+        map[section.key] = results[index];
+      });
       setValues(map);
       setMessage("模板已加载。");
     } catch (error) {
@@ -39,11 +41,9 @@ export function TemplatesPage() {
   async function handleSave() {
     setSaving(true);
     try {
-      await putText(
-        sections.find((s) => s.key === activeKey)!.endpoint,
-        values[activeKey] ?? "",
-      );
-      setMessage(`${sections.find((s) => s.key === activeKey)!.label}已保存。`);
+      const section = sections.find((item) => item.key === activeKey)!;
+      await putText(section.endpoint, values[activeKey] ?? "");
+      setMessage(`${section.label}已保存。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存模板失败");
     } finally {
@@ -58,23 +58,25 @@ export function TemplatesPage() {
       </div>
 
       <div className="tabs">
-        {sections.map((s) => (
+        {sections.map((section) => (
           <button
-            key={s.key}
+            key={section.key}
             type="button"
-            className={`tab ${activeKey === s.key ? "active" : ""}`}
-            onClick={() => setActiveKey(s.key)}
+            className={`tab ${activeKey === section.key ? "active" : ""}`}
+            onClick={() => setActiveKey(section.key)}
           >
-            {s.label}
+            {section.label}
           </button>
         ))}
       </div>
 
       <div className="card">
         <div className="card-header">
-          <h2>{sections.find((s) => s.key === activeKey)?.label ?? activeKey}</h2>
+          <h2>{sections.find((section) => section.key === activeKey)?.label ?? activeKey}</h2>
           <div className="page-actions">
-            <button type="button" className="btn" onClick={() => void loadAll()}>重新加载</button>
+            <button type="button" className="btn" onClick={() => void loadAll()}>
+              重新加载
+            </button>
             <button type="button" className="btn btn-primary" onClick={() => void handleSave()} disabled={saving}>
               {saving ? "保存中..." : "保存"}
             </button>

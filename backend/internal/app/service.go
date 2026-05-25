@@ -188,14 +188,6 @@ func (s Service) UpdateGroupsConfig(next config.GroupConfig) error {
 	return s.cleanupAppConfig()
 }
 
-func (s Service) ReadBaseYAML(mode string) (string, error) {
-	return config.LoadBaseYAML(s.ConfigDir, mode)
-}
-
-func (s Service) UpdateBaseYAML(mode, raw string) error {
-	return config.SaveBaseYAML(s.ConfigDir, mode, raw)
-}
-
 func (s Service) SearchUsers(query string) ([]xui.UserSummary, error) {
 	bundle, err := s.loadBundle()
 	if err != nil {
@@ -891,23 +883,13 @@ func (s Service) ImportFromServer(ctx context.Context, serverID int64) (*ImportR
 				seen[cl.Email] = u
 				imported++
 			} else {
-				existing.UUID = cl.ID
-				existing.Password = cl.Password
-				existing.Auth = cl.Auth
-				existing.Flow = cl.Flow
-				existing.Security = cl.Security
-				existing.TotalGB = cl.TotalGB
-				existing.ExpiryTime = cl.ExpiryTime
-				existing.LimitIP = cl.LimitIP
-				existing.SubID = cl.SubID
-				existing.TgID = int64(cl.TgID)
-				existing.Reset = cl.Reset
-				existing.Comment = cl.Comment
-				if err := s.DB.UpdateUser(existing); err != nil {
-					return nil, fmt.Errorf("update user %s: %w", cl.Email, err)
+				if applyImportedClient(existing, cl) {
+					if err := s.DB.UpdateUser(existing); err != nil {
+						return nil, fmt.Errorf("update user %s: %w", cl.Email, err)
+					}
+					updated++
 				}
 				seen[cl.Email] = existing
-				updated++
 			}
 		}
 	}
@@ -961,6 +943,43 @@ func (s Service) ImportFromServer(ctx context.Context, serverID int64) (*ImportR
 }
 
 // ─── Sync ───────────────────────────────────────────────────────────
+
+func applyImportedClient(user *db.User, client xui.InboundClient) bool {
+	changed := false
+	setString := func(target *string, value string) {
+		if *target != value {
+			*target = value
+			changed = true
+		}
+	}
+	setInt := func(target *int, value int) {
+		if *target != value {
+			*target = value
+			changed = true
+		}
+	}
+	setInt64 := func(target *int64, value int64) {
+		if *target != value {
+			*target = value
+			changed = true
+		}
+	}
+
+	setString(&user.UUID, client.ID)
+	setString(&user.Password, client.Password)
+	setString(&user.Auth, client.Auth)
+	setString(&user.Flow, client.Flow)
+	setString(&user.Security, client.Security)
+	setInt64(&user.TotalGB, client.TotalGB)
+	setInt64(&user.ExpiryTime, client.ExpiryTime)
+	setInt(&user.LimitIP, client.LimitIP)
+	setString(&user.SubID, client.SubID)
+	setInt64(&user.TgID, int64(client.TgID))
+	setInt(&user.Reset, client.Reset)
+	setString(&user.Comment, client.Comment)
+
+	return changed
+}
 
 func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 	servers, err := s.DB.ListServers()

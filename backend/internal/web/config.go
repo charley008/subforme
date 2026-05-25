@@ -72,41 +72,6 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 	}))
 
-	mux.HandleFunc("/api/config/base", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
-		mode := r.URL.Query().Get("mode")
-		if mode == "" {
-			http.Error(w, "missing mode query", http.StatusBadRequest)
-			return
-		}
-		if deps.ConfigService == nil {
-			http.Error(w, "config service unavailable", http.StatusNotImplemented)
-			return
-		}
-		switch r.Method {
-		case http.MethodGet:
-			raw, err := deps.ConfigService.ReadBaseYAML(mode)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadGateway)
-				return
-			}
-			w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
-			_, _ = w.Write([]byte(raw))
-		case http.MethodPut:
-			raw, err := io.ReadAll(r.Body)
-			if err != nil {
-				http.Error(w, "read request body failed", http.StatusBadRequest)
-				return
-			}
-			if err := deps.ConfigService.UpdateBaseYAML(mode, string(raw)); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-
 	mux.HandleFunc("/api/config/template", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
 		section := r.URL.Query().Get("section")
 		if section == "" {
