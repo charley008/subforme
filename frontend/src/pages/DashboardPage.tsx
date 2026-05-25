@@ -14,6 +14,12 @@ type UserBars = {
   total: number;
 };
 
+type NodeTrafficTotal = {
+  server_id: number;
+  server_name: string;
+  total: number;
+};
+
 type Server = {
   id: number;
   name: string;
@@ -66,6 +72,30 @@ export function DashboardPage() {
     chart.forEach((u) => u.bars.forEach((b) => ids.add(b.server_id)));
     return ids;
   }, [chart]);
+  const nodeTotals = useMemo<NodeTrafficTotal[]>(() => {
+    const totals = new Map<number, NodeTrafficTotal>();
+    chart.forEach((user) => {
+      user.bars.forEach((bar) => {
+        const current = totals.get(bar.server_id) ?? {
+          server_id: bar.server_id,
+          server_name: bar.server_name,
+          total: 0,
+        };
+        current.total += bar.total;
+        totals.set(bar.server_id, current);
+      });
+    });
+    return Array.from(totals.values()).filter((item) => item.total > 0).sort((a, b) => b.total - a.total);
+  }, [chart]);
+  const maxNodeTotal = nodeTotals.length > 0 ? Math.max(...nodeTotals.map((item) => item.total)) : 1;
+  const serverColorMap = useMemo(() => {
+    const orderedIDs = Array.from(new Set([
+      ...servers.map((server) => server.id),
+      ...nodeTotals.map((node) => node.server_id),
+    ]));
+    return new Map(orderedIDs.map((id, index) => [id, COLORS[index % COLORS.length]]));
+  }, [nodeTotals, servers]);
+  const colorForServer = (serverID: number) => serverColorMap.get(serverID) ?? COLORS[0];
 
   async function loadDashboard() {
     try {
@@ -156,6 +186,40 @@ export function DashboardPage() {
       {chart.length > 0 && (
         <div className="card" style={{ marginTop: 20 }}>
           <div className="card-header">
+            <h2>节点总流量</h2>
+          </div>
+          <div className="card-body" style={{ padding: "16px 20px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {nodeTotals.map((node) => {
+                const pct = Math.max((node.total / maxNodeTotal) * 100, 2);
+                return (
+                  <div key={node.server_id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <strong style={{ fontSize: 13 }}>{node.server_name}</strong>
+                      <span style={{ fontSize: 12, color: "var(--gray-500)" }}>{formatBytes(node.total)}</span>
+                    </div>
+                    <div style={{ height: 18, borderRadius: 6, overflow: "hidden", background: "var(--gray-100)" }}>
+                      <div
+                        title={`${node.server_name}: ${formatBytes(node.total)}`}
+                        style={{
+                          width: `${pct}%`,
+                          height: "100%",
+                          background: colorForServer(node.server_id),
+                          borderRadius: 6,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {chart.length > 0 && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div className="card-header">
             <h2>{"\u7528\u6237\u6d41\u91cf"}</h2>
             <div className="page-actions">
               {servers.filter((server) => visibleServerIDs.has(server.id)).map((server) => (
@@ -171,16 +235,16 @@ export function DashboardPage() {
                 <div key={u.email}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                     <strong style={{ fontSize: 13 }}>{u.email}</strong>
-                    <span style={{ fontSize: 12, color: "#64748b" }}>{formatBytes(u.total)}</span>
+                    <span style={{ fontSize: 12, color: "var(--gray-500)" }}>{formatBytes(u.total)}</span>
                   </div>
-                  <div style={{ display: "flex", height: 24, borderRadius: 6, overflow: "hidden", background: "#f1f5f9" }}>
+                  <div style={{ display: "flex", height: 24, borderRadius: 6, overflow: "hidden", background: "var(--gray-100)" }}>
                     {u.bars.map((b, i) => {
                       const pct = (b.total / maxVal) * 100;
                       return pct > 0 ? (
                         <div
                           key={b.server_id}
                           title={`${b.server_name}: ${formatBytes(b.total)}`}
-                          style={{ width: `${pct}%`, minWidth: 4, background: COLORS[i % COLORS.length], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 500 }}
+                          style={{ width: `${pct}%`, minWidth: 4, background: colorForServer(b.server_id), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#fff", fontWeight: 500 }}
                         >
                           {pct > 15 ? b.server_name : ""}
                         </div>
@@ -189,8 +253,8 @@ export function DashboardPage() {
                   </div>
                   <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
                     {u.bars.map((b, i) => (
-                      <span key={b.server_id} style={{ fontSize: 11, color: "#64748b", display: "flex", alignItems: "center", gap: 3 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 2, background: COLORS[i % COLORS.length], display: "inline-block" }} />
+                      <span key={b.server_id} style={{ fontSize: 11, color: "var(--gray-500)", display: "flex", alignItems: "center", gap: 3 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: colorForServer(b.server_id), display: "inline-block" }} />
                         {b.server_name}: {formatBytes(b.total)}
                       </span>
                     ))}
