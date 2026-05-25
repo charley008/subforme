@@ -24,8 +24,12 @@ type Inbound struct {
 	ServerID           int64  `json:"server_id"`
 	InboundID          int    `json:"inbound_id"`
 	Remark             string `json:"remark"`
+	Listen             string `json:"listen,omitempty"`
 	Port               int    `json:"port"`
 	Protocol           string `json:"protocol"`
+	Total              int64  `json:"total"`
+	ExpiryTime         int64  `json:"expiry_time"`
+	TrafficReset       string `json:"traffic_reset,omitempty"`
 	SettingsJSON       string `json:"settings_json"`
 	StreamSettingsJSON string `json:"stream_settings_json,omitempty"`
 	SniffingJSON       string `json:"sniffing_json,omitempty"`

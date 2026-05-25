@@ -150,6 +150,10 @@ func (s stubDBService) LoadTraffic(ctx context.Context) map[string][]db.ServerTr
 	return s.traffic
 }
 
+func (s stubDBService) ResetServerUserTraffic(ctx context.Context, serverID int64) (*app.TrafficResetResult, error) {
+	return &app.TrafficResetResult{Server: "test"}, nil
+}
+
 func (s stubDBService) ImportFromServer(ctx context.Context, serverID int64) (*app.ImportResult, error) {
 	return &app.ImportResult{}, nil
 }

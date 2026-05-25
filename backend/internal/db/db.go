@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 5
+const schemaVersion = 6
 
 type Store struct {
 	DB *sql.DB
@@ -68,6 +68,7 @@ func (s *Store) migrate() error {
 		{version: 3, run: s.migrateV3},
 		{version: 4, run: s.migrateV4},
 		{version: 5, run: s.migrateV5},
+		{version: 6, run: s.migrateV6},
 	}
 
 	for _, migration := range migrations {
@@ -82,6 +83,22 @@ func (s *Store) migrate() error {
 	}
 
 	return nil
+}
+
+func (s *Store) migrateV6() error {
+	statements := []string{
+		`ALTER TABLE inbounds ADD COLUMN listen TEXT DEFAULT ''`,
+		`ALTER TABLE inbounds ADD COLUMN total INTEGER DEFAULT 0`,
+		`ALTER TABLE inbounds ADD COLUMN expiry_time INTEGER DEFAULT 0`,
+		`ALTER TABLE inbounds ADD COLUMN traffic_reset TEXT DEFAULT ''`,
+	}
+	for _, stmt := range statements {
+		if _, err := s.DB.Exec(stmt); err != nil {
+			continue
+		}
+	}
+	_, err := s.DB.Exec("INSERT INTO schema_version (version, applied_at) VALUES (6, ?)", time.Now().Unix())
+	return err
 }
 
 func (s *Store) migrateV5() error {
@@ -207,8 +224,12 @@ func (s *Store) migrateV1() error {
 			server_id           INTEGER NOT NULL REFERENCES servers(id),
 			inbound_id          INTEGER NOT NULL,
 			remark              TEXT NOT NULL,
+			listen              TEXT DEFAULT '',
 			port                INTEGER NOT NULL,
 			protocol            TEXT NOT NULL,
+			total               INTEGER DEFAULT 0,
+			expiry_time         INTEGER DEFAULT 0,
+			traffic_reset       TEXT DEFAULT '',
 			settings_json       TEXT NOT NULL,
 			stream_settings_json TEXT DEFAULT '',
 			sniffing_json       TEXT DEFAULT '',

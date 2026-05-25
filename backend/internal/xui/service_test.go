@@ -30,6 +30,21 @@ func TestResolveUserReturnsFalseWhenMissing(t *testing.T) {
 	}
 }
 
+func TestBuildClientConfigPreservesGlobalPasswordForVless(t *testing.T) {
+	got := BuildClientConfig("vless", ClientParams{
+		Email:    "test",
+		UUID:     "uuid-1",
+		Password: "password-1",
+		Auth:     "auth-1",
+		Flow:     "xtls-rprx-vision",
+		SubID:    "sub-1",
+		Enable:   true,
+	})
+	if got.ID != "uuid-1" || got.Password != "password-1" || got.Auth != "auth-1" || got.SubID != "sub-1" {
+		t.Fatalf("expected global client credentials to be preserved, got %#v", got)
+	}
+}
+
 func TestResolverBuildsNodeFromInboundList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/panel/api/inbounds/list" {

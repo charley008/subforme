@@ -9,17 +9,23 @@ import (
 func (s *Store) UpsertInbound(inb *Inbound) error {
 	inb.UpdatedAt = time.Now().Unix()
 	_, err := s.DB.Exec(`
-		INSERT INTO inbounds (server_id, inbound_id, remark, port, protocol,
+		INSERT INTO inbounds (server_id, inbound_id, remark, listen, port, protocol,
+		                      total, expiry_time, traffic_reset,
 		                      settings_json, stream_settings_json, sniffing_json,
 		                      tag, enable, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(server_id, inbound_id) DO UPDATE SET
 			remark=excluded.remark, port=excluded.port, protocol=excluded.protocol,
+			listen=excluded.listen,
+			total=excluded.total,
+			expiry_time=excluded.expiry_time,
+			traffic_reset=excluded.traffic_reset,
 			settings_json=excluded.settings_json,
 			stream_settings_json=excluded.stream_settings_json,
 			sniffing_json=excluded.sniffing_json,
 			tag=excluded.tag, enable=excluded.enable, updated_at=excluded.updated_at
-	`, inb.ServerID, inb.InboundID, inb.Remark, inb.Port, inb.Protocol,
+	`, inb.ServerID, inb.InboundID, inb.Remark, inb.Listen, inb.Port, inb.Protocol,
+		inb.Total, inb.ExpiryTime, inb.TrafficReset,
 		inb.SettingsJSON, inb.StreamSettingsJSON, inb.SniffingJSON,
 		inb.Tag, boolToInt(inb.Enable), inb.UpdatedAt)
 	return err
@@ -27,7 +33,8 @@ func (s *Store) UpsertInbound(inb *Inbound) error {
 
 func (s *Store) ListInboundsByServer(serverID int64) ([]Inbound, error) {
 	rows, err := s.DB.Query(`
-		SELECT id, server_id, inbound_id, remark, port, protocol,
+		SELECT id, server_id, inbound_id, remark, COALESCE(listen,''), port, protocol,
+		       COALESCE(total,0), COALESCE(expiry_time,0), COALESCE(traffic_reset,''),
 		       settings_json, COALESCE(stream_settings_json,''),
 		       COALESCE(sniffing_json,''), COALESCE(tag,''), enable,
 		       COALESCE(traffic_json,''), updated_at
@@ -42,7 +49,8 @@ func (s *Store) ListInboundsByServer(serverID int64) ([]Inbound, error) {
 	for rows.Next() {
 		var in Inbound
 		if err := rows.Scan(&in.ID, &in.ServerID, &in.InboundID, &in.Remark,
-			&in.Port, &in.Protocol, &in.SettingsJSON, &in.StreamSettingsJSON,
+			&in.Listen, &in.Port, &in.Protocol, &in.Total, &in.ExpiryTime, &in.TrafficReset,
+			&in.SettingsJSON, &in.StreamSettingsJSON,
 			&in.SniffingJSON, &in.Tag, &in.Enable, &in.TrafficJSON, &in.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -54,13 +62,15 @@ func (s *Store) ListInboundsByServer(serverID int64) ([]Inbound, error) {
 func (s *Store) GetInbound(id int64) (*Inbound, error) {
 	var in Inbound
 	err := s.DB.QueryRow(`
-		SELECT id, server_id, inbound_id, remark, port, protocol,
+		SELECT id, server_id, inbound_id, remark, COALESCE(listen,''), port, protocol,
+		       COALESCE(total,0), COALESCE(expiry_time,0), COALESCE(traffic_reset,''),
 		       settings_json, COALESCE(stream_settings_json,''),
 		       COALESCE(sniffing_json,''), COALESCE(tag,''), enable,
 		       COALESCE(traffic_json,''), updated_at
 		FROM inbounds WHERE id = ?
 	`, id).Scan(&in.ID, &in.ServerID, &in.InboundID, &in.Remark,
-		&in.Port, &in.Protocol, &in.SettingsJSON, &in.StreamSettingsJSON,
+		&in.Listen, &in.Port, &in.Protocol, &in.Total, &in.ExpiryTime, &in.TrafficReset,
+		&in.SettingsJSON, &in.StreamSettingsJSON,
 		&in.SniffingJSON, &in.Tag, &in.Enable, &in.TrafficJSON, &in.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -84,7 +94,8 @@ func (s *Store) UpdateInboundClientsJSON(id int64, settingsJSON string) error {
 // FindInboundsByServerAndProtocol returns enabled inbounds on a server matching the given protocol.
 func (s *Store) FindInboundsByServerAndProtocol(serverID int64, protocol string) ([]Inbound, error) {
 	rows, err := s.DB.Query(`
-		SELECT id, server_id, inbound_id, remark, port, protocol,
+		SELECT id, server_id, inbound_id, remark, COALESCE(listen,''), port, protocol,
+		       COALESCE(total,0), COALESCE(expiry_time,0), COALESCE(traffic_reset,''),
 		       settings_json, COALESCE(stream_settings_json,''),
 		       COALESCE(sniffing_json,''), COALESCE(tag,''), enable,
 		       COALESCE(traffic_json,''), updated_at
@@ -100,7 +111,8 @@ func (s *Store) FindInboundsByServerAndProtocol(serverID int64, protocol string)
 	for rows.Next() {
 		var in Inbound
 		if err := rows.Scan(&in.ID, &in.ServerID, &in.InboundID, &in.Remark,
-			&in.Port, &in.Protocol, &in.SettingsJSON, &in.StreamSettingsJSON,
+			&in.Listen, &in.Port, &in.Protocol, &in.Total, &in.ExpiryTime, &in.TrafficReset,
+			&in.SettingsJSON, &in.StreamSettingsJSON,
 			&in.SniffingJSON, &in.Tag, &in.Enable, &in.TrafficJSON, &in.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -125,14 +137,19 @@ func (s *Store) EnsureServerInbounds(serverID int64, inbounds []Inbound) error {
 		in.UpdatedAt = now
 		seen = append(seen, fmt.Sprint(in.InboundID))
 		_, err := tx.Exec(`
-			INSERT INTO inbounds (server_id, inbound_id, remark, port, protocol,
+			INSERT INTO inbounds (server_id, inbound_id, remark, listen, port, protocol,
+			                      total, expiry_time, traffic_reset,
 			                      settings_json, stream_settings_json, sniffing_json,
 			                      tag, enable, traffic_json, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(server_id, inbound_id) DO UPDATE SET
 				remark=excluded.remark,
+				listen=excluded.listen,
 				port=excluded.port,
 				protocol=excluded.protocol,
+				total=excluded.total,
+				expiry_time=excluded.expiry_time,
+				traffic_reset=excluded.traffic_reset,
 				settings_json=excluded.settings_json,
 				stream_settings_json=excluded.stream_settings_json,
 				sniffing_json=excluded.sniffing_json,
@@ -140,7 +157,8 @@ func (s *Store) EnsureServerInbounds(serverID int64, inbounds []Inbound) error {
 				enable=excluded.enable,
 				traffic_json=excluded.traffic_json,
 				updated_at=excluded.updated_at
-		`, in.ServerID, in.InboundID, in.Remark, in.Port, in.Protocol,
+		`, in.ServerID, in.InboundID, in.Remark, in.Listen, in.Port, in.Protocol,
+			in.Total, in.ExpiryTime, in.TrafficReset,
 			in.SettingsJSON, in.StreamSettingsJSON, in.SniffingJSON,
 			in.Tag, boolToInt(in.Enable), in.TrafficJSON, in.UpdatedAt)
 		if err != nil {

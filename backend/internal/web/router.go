@@ -15,6 +15,10 @@ type SubscriptionService interface {
 	Generate(user string) ([]byte, error)
 }
 
+type PublicBaseSubscriptionService interface {
+	GenerateWithBaseURL(user, publicBaseURL string) ([]byte, error)
+}
+
 type AuthService interface {
 	Check(username, password string) bool
 	UpdatePassword(newPassword string)
@@ -58,6 +62,7 @@ type DBService interface {
 	DBGetUserTraffic(userID int64) []db.ServerTraffic
 	RefreshTraffic(ctx context.Context) map[string][]db.ServerTraffic
 	LoadTraffic(ctx context.Context) map[string][]db.ServerTraffic
+	ResetServerUserTraffic(ctx context.Context, serverID int64) (*app.TrafficResetResult, error)
 	ImportFromServer(ctx context.Context, serverID int64) (*app.ImportResult, error)
 	SyncToServers(ctx context.Context) (*app.SyncResult, error)
 	DBListServers() ([]db.Server, error)

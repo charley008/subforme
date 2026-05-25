@@ -54,6 +54,10 @@ func NewServiceWithDB(configDir string, defaultXUI config.XUIConfig, store *db.S
 }
 
 func (s Service) Generate(user string) ([]byte, error) {
+	return s.GenerateWithBaseURL(user, "")
+}
+
+func (s Service) GenerateWithBaseURL(user, publicBaseURL string) ([]byte, error) {
 	bundle, err := s.loadBundle()
 	if err != nil {
 		return nil, err
@@ -83,6 +87,7 @@ func (s Service) Generate(user string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load providers: %w", err)
 	}
+	providers = withProviderPublicBaseURL(providers, publicBaseURL)
 	templateLoader := s.TemplateLoader
 	if templateLoader == nil {
 		templateLoader = config.LoadModeTemplateYAML
@@ -108,6 +113,39 @@ func (s Service) Generate(user string) ([]byte, error) {
 	}
 
 	return raw, nil
+}
+
+func withProviderPublicBaseURL(providers []config.ProviderAddon, publicBaseURL string) []config.ProviderAddon {
+	publicBaseURL = strings.TrimRight(publicBaseURL, "/")
+	if publicBaseURL == "" {
+		return providers
+	}
+	out := make([]config.ProviderAddon, len(providers))
+	copy(out, providers)
+	for i := range out {
+		if len(out[i].ProxyProviders) == 0 {
+			continue
+		}
+		copied := make(map[string]any, len(out[i].ProxyProviders))
+		for key, value := range out[i].ProxyProviders {
+			copied[key] = rewriteProviderURLValue(value, publicBaseURL, key)
+		}
+		out[i].ProxyProviders = copied
+	}
+	return out
+}
+
+func rewriteProviderURLValue(value any, publicBaseURL, id string) any {
+	entry, ok := value.(map[string]any)
+	if !ok {
+		return value
+	}
+	copied := make(map[string]any, len(entry))
+	for k, v := range entry {
+		copied[k] = v
+	}
+	copied["url"] = publicBaseURL + "/api/proxy-providers/" + id + ".yaml"
+	return copied
 }
 
 func (s Service) ReadAppConfig() (config.AppConfig, error) {
@@ -664,6 +702,38 @@ func (s Service) LoadTraffic(ctx context.Context) map[string][]db.ServerTraffic 
 
 // ─── DB-backed user management ──────────────────────────────────────
 
+type TrafficResetResult struct {
+	Server  string   `json:"server"`
+	Reset   int      `json:"reset"`
+	Skipped int      `json:"skipped"`
+	Errors  []string `json:"errors,omitempty"`
+}
+
+func (s Service) ResetServerUserTraffic(ctx context.Context, serverID int64) (*TrafficResetResult, error) {
+	sv, err := s.DB.GetServer(serverID)
+	if err != nil {
+		return nil, fmt.Errorf("get server: %w", err)
+	}
+	cli := xui.NewClient(s.xuiURL(sv), sv.APIKey, "", "")
+	clients, err := cli.ListClients(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list clients: %w", err)
+	}
+	result := &TrafficResetResult{Server: sv.Name}
+	for _, client := range clients {
+		if client.Email == "" || len(client.InboundIDs) == 0 {
+			result.Skipped++
+			continue
+		}
+		if err := cli.ResetClientTraffic(ctx, client.Email); err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", client.Email, err))
+			continue
+		}
+		result.Reset++
+	}
+	return result, nil
+}
+
 func (s Service) DBUserSearch(query string) ([]db.User, error) {
 	if query == "" {
 		return s.DB.ListUsers()
@@ -803,10 +873,17 @@ func (s Service) ImportFromServer(ctx context.Context, serverID int64) (*ImportR
 					Email:      cl.Email,
 					UUID:       cl.ID,
 					Password:   cl.Password,
+					Auth:       cl.Auth,
 					Flow:       cl.Flow,
-					TotalGB:    inb.Total,
-					ExpiryTime: inb.ExpiryTime,
-					Enable:     cl.Enable,
+					Security:   cl.Security,
+					TotalGB:    cl.TotalGB,
+					ExpiryTime: cl.ExpiryTime,
+					LimitIP:    cl.LimitIP,
+					SubID:      cl.SubID,
+					TgID:       int64(cl.TgID),
+					Reset:      cl.Reset,
+					Comment:    cl.Comment,
+					Enable:     true,
 				}
 				if err := s.DB.CreateUser(u); err != nil {
 					return nil, fmt.Errorf("create user %s: %w", cl.Email, err)
@@ -815,17 +892,17 @@ func (s Service) ImportFromServer(ctx context.Context, serverID int64) (*ImportR
 				imported++
 			} else {
 				existing.UUID = cl.ID
-				if cl.Password != "" {
-					existing.Password = cl.Password
-				}
-				if cl.Flow != "" {
-					existing.Flow = cl.Flow
-				}
-				if inb.Total > 0 {
-					existing.TotalGB = inb.Total
-				}
-				existing.ExpiryTime = inb.ExpiryTime
-				existing.Enable = cl.Enable
+				existing.Password = cl.Password
+				existing.Auth = cl.Auth
+				existing.Flow = cl.Flow
+				existing.Security = cl.Security
+				existing.TotalGB = cl.TotalGB
+				existing.ExpiryTime = cl.ExpiryTime
+				existing.LimitIP = cl.LimitIP
+				existing.SubID = cl.SubID
+				existing.TgID = int64(cl.TgID)
+				existing.Reset = cl.Reset
+				existing.Comment = cl.Comment
 				if err := s.DB.UpdateUser(existing); err != nil {
 					return nil, fmt.Errorf("update user %s: %w", cl.Email, err)
 				}
@@ -893,11 +970,12 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 	result := &SyncResult{}
 	log.Printf("[sync] found %d servers", len(servers))
 
-	// Track users removed from main server for cross-server deletion
-	removedFromMain := map[string]bool{}
+	var mainServer *db.Server
 
-	for _, sv := range servers {
+	for i := range servers {
+		sv := servers[i]
 		if sv.IsMain && sv.Enabled {
+			mainServer = &servers[i]
 			log.Printf("[sync] auto-import from main server %s", sv.Name)
 			imported, err := s.ImportFromServer(ctx, sv.ID)
 			if err != nil {
@@ -905,19 +983,31 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 			} else {
 				log.Printf("[sync] import: %d new, %d updated, %d total, %d removed",
 					imported.Imported, imported.Updated, imported.Total, len(imported.Removed))
-				for _, email := range imported.Removed {
-					removedFromMain[email] = true
-				}
 			}
 			break
 		}
 	}
+	if mainServer == nil {
+		return result, fmt.Errorf("no enabled main server configured")
+	}
 
-	users, err := s.DB.ListEnabledUsers()
+	users, err := s.DB.ListUsers()
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
-	log.Printf("[sync] %d enabled users in DB", len(users))
+	log.Printf("[sync] %d users in DB", len(users))
+
+	mainInbounds, err := s.DB.ListInboundsByServer(mainServer.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list main inbounds: %w", err)
+	}
+	mainByLocalID := inboundsByLocalID(mainInbounds)
+	mainAssignments, err := s.DB.ListAssignmentsByServer(mainServer.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list main assignments: %w", err)
+	}
+	desiredByEmail := desiredInboundTagsByEmail(mainAssignments, mainByLocalID)
+	localByEmail := usersByEmail(users)
 
 	for _, sv := range servers {
 		if sv.IsMain || !sv.Enabled {
@@ -933,150 +1023,92 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 			continue
 		}
 		log.Printf("[sync] %s: %d inbounds", sv.Name, len(existingInbounds))
-		inbounds, err := s.cacheServerInbounds(sv.ID, existingInbounds)
+		syncedInbounds, err := s.syncServerInbounds(ctx, cli, sv, mainInbounds, existingInbounds)
 		if err != nil {
-			log.Printf("[sync] cache inbounds for %s: %v", sv.Name, err)
+			log.Printf("[sync] sync inbounds for %s: %v", sv.Name, err)
 			result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: err.Error()})
 			continue
 		}
-		cachedByAPIID := inboundsByAPIID(inbounds)
 
-		existingEmails := map[string]bool{}
-		for _, inb := range existingInbounds {
-			if settings, ok := xui.ParseInboundSettings(inb.Settings); ok {
-				for _, cl := range settings.Clients {
-					if cl.Email != "" {
-						existingEmails[cl.Email] = true
-					}
-				}
-			}
+		existingClients, existingAttachments, err := s.collectServerClients(ctx, cli, syncedInbounds)
+		if err != nil {
+			log.Printf("[sync] list clients for %s failed, falling back to inbound clients: %v", sv.Name, err)
 		}
-		log.Printf("[sync] %s: %d existing users", sv.Name, len(existingEmails))
-		if err := s.DB.DeleteAssignmentsByServer(sv.ID); err != nil {
-			log.Printf("[sync] clear assignments for %s: %v", sv.Name, err)
-		}
-		localByEmail := map[string]db.User{}
-		for _, u := range users {
-			localByEmail[u.Email] = u
-		}
-		for _, inb := range existingInbounds {
-			cached, ok := cachedByAPIID[int(inb.ID)]
-			if !ok {
-				continue
-			}
-			settings, ok := xui.ParseInboundSettings(inb.Settings)
-			if !ok {
-				continue
-			}
-			for _, cl := range settings.Clients {
-				u, ok := localByEmail[cl.Email]
-				if !ok {
-					continue
-				}
-				_ = s.DB.CreateAssignment(&db.UserAssignment{
-					UserID:        u.ID,
-					ServerID:      sv.ID,
-					InboundID:     cached.ID,
-					EmailOnServer: cl.Email,
-					Enable:        cl.Enable,
-				})
-			}
-		}
+		log.Printf("[sync] %s: %d existing users", sv.Name, len(existingClients))
+		targetByTag := dbInboundsByTag(syncedInbounds)
 
 		for _, u := range users {
-			if existingEmails[u.Email] {
+			tags := desiredByEmail[u.Email]
+			if len(tags) == 0 {
 				continue
 			}
-			log.Printf("[sync] adding %s to %s", u.Email, sv.Name)
-
-			matched := false
-			assignments, _ := s.DB.ListAssignmentsByUser(u.ID)
-			for _, a := range assignments {
-				if a.ServerID == sv.ID {
-					inb, err := s.DB.GetInbound(a.InboundID)
-					if err != nil {
+			desiredInboundIDs := inboundIDsForTags(tags, targetByTag)
+			if len(desiredInboundIDs) == 0 {
+				log.Printf("[sync] %s: no matching target inbounds for %s", sv.Name, u.Email)
+				continue
+			}
+			protocol := protocolForFirstTag(tags, targetByTag)
+			client := buildXUIClient(protocol, u)
+			if existing, ok := existingClients[u.Email]; ok {
+				client.Enable = existing.Enable
+				if !sameRemoteClient(existing, client) {
+					if err := cli.UpdateClientByEmail(ctx, u.Email, client); err != nil {
+						result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("update %s: %v", u.Email, err)})
 						continue
 					}
-					cc := xui.BuildClientConfig(inb.Protocol, xui.ClientParams{
-						Email: u.Email, UUID: u.UUID, Password: u.Password, Flow: u.Flow,
-						TotalGB: u.TotalGB, ExpiryTime: u.ExpiryTime, LimitIP: u.LimitIP, Enable: u.Enable,
-					})
-					raw, _ := json.Marshal(map[string]any{"clients": []xui.InboundClient{cc}})
-					if err := cli.AddClient(ctx, inb.InboundID, string(raw)); err != nil {
-						result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("add %s: %v", u.Email, err)})
-						continue
-					}
-					s.DB.UpdateInboundClientsJSON(inb.ID, upsertClientInSettings(inb.SettingsJSON, cc))
-					log.Printf("[sync] %s added to %s inbound %d", u.Email, sv.Name, inb.InboundID)
-					result.Synced++
-					matched = true
-					break
+					result.Updated++
 				}
-			}
-			if matched {
-				continue
-			}
-
-			for _, inb := range inbounds {
-				if !inb.Enable {
+				add, remove := diffInboundAttachments(existingAttachments[u.Email], desiredInboundIDs)
+				if err := cli.AttachClient(ctx, u.Email, add); err != nil {
+					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("attach %s: %v", u.Email, err)})
 					continue
 				}
-				cc := xui.BuildClientConfig(inb.Protocol, xui.ClientParams{
-					Email: u.Email, UUID: u.UUID, Password: u.Password, Flow: u.Flow,
-					TotalGB: u.TotalGB, ExpiryTime: u.ExpiryTime, LimitIP: u.LimitIP, Enable: u.Enable,
-				})
-				raw, _ := json.Marshal(map[string]any{"clients": []xui.InboundClient{cc}})
-				if err := cli.AddClient(ctx, inb.InboundID, string(raw)); err != nil {
-					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("add %s: %v", u.Email, err)})
+				result.Attached += len(add)
+				if err := cli.DetachClient(ctx, u.Email, remove); err != nil {
+					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("detach %s: %v", u.Email, err)})
 					continue
 				}
-				log.Printf("[sync] %s added to %s inbound %d", u.Email, sv.Name, inb.InboundID)
-				s.DB.UpdateInboundClientsJSON(inb.ID, upsertClientInSettings(inb.SettingsJSON, cc))
-				if assignee, _ := s.DB.GetUserByEmail(u.Email); assignee != nil {
-					s.DB.CreateAssignment(&db.UserAssignment{
-						UserID: assignee.ID, ServerID: sv.ID, InboundID: inb.ID,
-						EmailOnServer: u.Email, Enable: true,
-					})
+				result.Detached += len(remove)
+			} else if err := cli.CreateClient(ctx, client, desiredInboundIDs); err != nil {
+				if !isEmailAlreadyInUse(err) {
+					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("create %s: %v", u.Email, err)})
+					continue
 				}
-				result.Synced++
-				break
+				log.Printf("[sync] %s already exists on %s, updating and attaching", u.Email, sv.Name)
+				if err := cli.UpdateClientByEmail(ctx, u.Email, client); err != nil {
+					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("update existing %s: %v", u.Email, err)})
+					continue
+				}
+				result.Updated++
+				if err := cli.AttachClient(ctx, u.Email, desiredInboundIDs); err != nil {
+					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("attach existing %s: %v", u.Email, err)})
+					continue
+				}
+				result.Attached += len(desiredInboundIDs)
+			} else {
+				result.Added++
 			}
+			result.Synced++
 		}
 
-		// Delete users on this server that don't exist in local DB
-		localEmails := map[string]bool{}
-		for _, u := range users {
-			localEmails[u.Email] = true
-		}
-		for email := range existingEmails {
-			if localEmails[email] && !removedFromMain[email] {
-				continue // exists in DB and wasn't removed from main, keep it
+		for email := range existingClients {
+			if _, ok := localByEmail[email]; ok {
+				if len(desiredByEmail[email]) > 0 {
+					continue
+				}
 			}
 			log.Printf("[sync] deleting %s from %s", email, sv.Name)
-			result.Deleted++
-			for _, inb := range existingInbounds {
-				if err := cli.DeleteClientByEmail(ctx, int(inb.ID), email); err != nil {
-					log.Printf("[sync] delete %s from %s inbound %d failed: %v", email, sv.Name, inb.ID, err)
-					continue
-				}
-				if cached, ok := cachedByAPIID[int(inb.ID)]; ok {
-					s.DB.UpdateInboundClientsJSON(cached.ID, removeClientFromSettings(cached.SettingsJSON, email))
-				}
+			if err := cli.DeleteClientByEmailV2(ctx, email); err != nil {
+				result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("delete %s: %v", email, err)})
+				continue
 			}
+			result.Deleted++
 		}
-	}
 
-	// Disable removed users in local DB (those with no assignments left)
-	for email := range removedFromMain {
-		u, err := s.DB.GetUserByEmail(email)
-		if err != nil {
-			continue
-		}
-		rem, _ := s.DB.ListAssignmentsByUser(u.ID)
-		if len(rem) == 0 {
-			u.Enable = false
-			s.DB.UpdateUser(u)
-			log.Printf("[sync] disabled %s in local DB (no remaining assignments)", email)
+		refetched, err := cli.ListInbounds(ctx)
+		if err == nil {
+			_, _ = s.cacheServerInbounds(sv.ID, refetched)
+			_ = s.rebuildAssignmentsFromRemote(sv.ID, refetched, localByEmail)
 		}
 	}
 
@@ -1097,11 +1129,16 @@ func (s Service) cacheServerInbounds(serverID int64, inbounds []xui.InboundRecor
 		cached = append(cached, db.Inbound{
 			InboundID:          int(inb.ID),
 			Remark:             inb.Remark,
+			Listen:             inb.Listen,
 			Port:               inb.Port,
 			Protocol:           inb.Protocol,
+			Total:              inb.Total,
+			ExpiryTime:         inb.ExpiryTime,
+			TrafficReset:       inb.TrafficReset,
 			SettingsJSON:       inb.Settings,
 			StreamSettingsJSON: inb.StreamSettings,
 			SniffingJSON:       inb.Sniffing,
+			Tag:                inb.Tag,
 			Enable:             inb.Enable,
 			TrafficJSON:        trafficJSON,
 		})
@@ -1118,6 +1155,353 @@ func inboundsByAPIID(inbounds []db.Inbound) map[int]db.Inbound {
 		out[inb.InboundID] = inb
 	}
 	return out
+}
+
+func inboundsByLocalID(inbounds []db.Inbound) map[int64]db.Inbound {
+	out := make(map[int64]db.Inbound, len(inbounds))
+	for _, inb := range inbounds {
+		out[inb.ID] = inb
+	}
+	return out
+}
+
+func dbInboundsByTag(inbounds []db.Inbound) map[string]db.Inbound {
+	out := make(map[string]db.Inbound, len(inbounds))
+	for _, inb := range inbounds {
+		key := inboundSyncKey(inb)
+		if key != "" {
+			out[key] = inb
+		}
+	}
+	return out
+}
+
+func desiredInboundTagsByEmail(assignments []db.UserAssignment, inbounds map[int64]db.Inbound) map[string][]string {
+	out := map[string][]string{}
+	for _, a := range assignments {
+		if !a.Enable {
+			continue
+		}
+		inb, ok := inbounds[a.InboundID]
+		if !ok {
+			continue
+		}
+		key := inboundSyncKey(inb)
+		if key == "" {
+			continue
+		}
+		out[a.EmailOnServer] = appendUniqueString(out[a.EmailOnServer], key)
+	}
+	return out
+}
+
+func usersByEmail(users []db.User) map[string]db.User {
+	out := make(map[string]db.User, len(users))
+	for _, u := range users {
+		out[u.Email] = u
+	}
+	return out
+}
+
+func inboundSyncKey(inb db.Inbound) string {
+	if strings.TrimSpace(inb.Tag) != "" {
+		return strings.TrimSpace(inb.Tag)
+	}
+	return fmt.Sprintf("%s|%s|%d|%s", inb.Protocol, inb.Listen, inb.Port, inb.Remark)
+}
+
+func inboundRecordSyncKey(inb xui.InboundRecord) string {
+	if strings.TrimSpace(inb.Tag) != "" {
+		return strings.TrimSpace(inb.Tag)
+	}
+	return fmt.Sprintf("%s|%s|%d|%s", inb.Protocol, inb.Listen, inb.Port, inb.Remark)
+}
+
+func appendUniqueString(list []string, value string) []string {
+	for _, item := range list {
+		if item == value {
+			return list
+		}
+	}
+	return append(list, value)
+}
+
+func inboundIDsForTags(tags []string, inbounds map[string]db.Inbound) []int {
+	out := []int{}
+	for _, tag := range tags {
+		if inb, ok := inbounds[tag]; ok && inb.Enable {
+			out = append(out, inb.InboundID)
+		}
+	}
+	return out
+}
+
+func protocolForFirstTag(tags []string, inbounds map[string]db.Inbound) string {
+	for _, tag := range tags {
+		if inb, ok := inbounds[tag]; ok {
+			return inb.Protocol
+		}
+	}
+	return ""
+}
+
+func buildXUIClient(protocol string, u db.User) xui.InboundClient {
+	return xui.BuildClientConfig(protocol, xui.ClientParams{
+		Email:      u.Email,
+		UUID:       u.UUID,
+		Password:   u.Password,
+		Auth:       u.Auth,
+		Flow:       u.Flow,
+		Security:   u.Security,
+		TotalGB:    u.TotalGB,
+		ExpiryTime: u.ExpiryTime,
+		LimitIP:    u.LimitIP,
+		SubID:      u.SubID,
+		TgID:       u.TgID,
+		Reset:      u.Reset,
+		Comment:    u.Comment,
+		Enable:     u.Enable,
+	})
+}
+
+func collectRemoteClients(inbounds []db.Inbound) (map[string]xui.ClientListRecord, map[string][]int) {
+	clients := map[string]xui.ClientListRecord{}
+	attachments := map[string][]int{}
+	for _, inb := range inbounds {
+		settings, ok := xui.ParseInboundSettings(inb.SettingsJSON)
+		if !ok {
+			continue
+		}
+		for _, cl := range settings.Clients {
+			if cl.Email == "" {
+				continue
+			}
+			clients[cl.Email] = xui.ClientListRecord{
+				Email:      cl.Email,
+				UUID:       cl.ID,
+				Password:   cl.Password,
+				Auth:       cl.Auth,
+				Flow:       cl.Flow,
+				Security:   cl.Security,
+				LimitIP:    cl.LimitIP,
+				TotalGB:    cl.TotalGB,
+				ExpiryTime: cl.ExpiryTime,
+				Enable:     cl.Enable,
+				TgID:       int64(cl.TgID),
+				SubID:      cl.SubID,
+				Reset:      cl.Reset,
+				Comment:    cl.Comment,
+			}
+			attachments[cl.Email] = appendUniqueInt(attachments[cl.Email], inb.InboundID)
+		}
+	}
+	return clients, attachments
+}
+
+func (s Service) collectServerClients(ctx context.Context, cli *xui.Client, inbounds []db.Inbound) (map[string]xui.ClientListRecord, map[string][]int, error) {
+	rows, err := cli.ListClients(ctx)
+	if err != nil {
+		clients, attachments := collectRemoteClients(inbounds)
+		return clients, attachments, err
+	}
+	clients := map[string]xui.ClientListRecord{}
+	attachments := map[string][]int{}
+	for _, row := range rows {
+		if row.Email == "" {
+			continue
+		}
+		clients[row.Email] = row
+		for _, inboundID := range row.InboundIDs {
+			attachments[row.Email] = appendUniqueInt(attachments[row.Email], inboundID)
+		}
+	}
+	return clients, attachments, nil
+}
+
+func appendUniqueInt(list []int, value int) []int {
+	for _, item := range list {
+		if item == value {
+			return list
+		}
+	}
+	return append(list, value)
+}
+
+func diffInboundAttachments(current, desired []int) ([]int, []int) {
+	currentSet := map[int]bool{}
+	desiredSet := map[int]bool{}
+	for _, id := range current {
+		currentSet[id] = true
+	}
+	for _, id := range desired {
+		desiredSet[id] = true
+	}
+	add := []int{}
+	remove := []int{}
+	for _, id := range desired {
+		if !currentSet[id] {
+			add = append(add, id)
+		}
+	}
+	for _, id := range current {
+		if !desiredSet[id] {
+			remove = append(remove, id)
+		}
+	}
+	return add, remove
+}
+
+func sameRemoteClient(existing xui.ClientListRecord, desired xui.InboundClient) bool {
+	return existing.Email == desired.Email &&
+		existing.UUID == desired.ID &&
+		existing.Password == desired.Password &&
+		existing.Auth == desired.Auth &&
+		existing.Flow == desired.Flow &&
+		existing.Security == desired.Security &&
+		existing.SubID == desired.SubID &&
+		existing.LimitIP == desired.LimitIP &&
+		existing.TotalGB == desired.TotalGB &&
+		existing.ExpiryTime == desired.ExpiryTime &&
+		existing.TgID == int64(desired.TgID) &&
+		existing.Reset == desired.Reset &&
+		existing.Comment == desired.Comment
+}
+
+func isEmailAlreadyInUse(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "email already in use")
+}
+
+func dbInboundToXUI(inb db.Inbound) xui.InboundRecord {
+	return xui.InboundRecord{
+		ID:             int64(inb.InboundID),
+		Total:          inb.Total,
+		Remark:         inb.Remark,
+		Enable:         inb.Enable,
+		ExpiryTime:     inb.ExpiryTime,
+		TrafficReset:   inb.TrafficReset,
+		Listen:         inb.Listen,
+		Port:           inb.Port,
+		Protocol:       inb.Protocol,
+		Settings:       inb.SettingsJSON,
+		StreamSettings: inb.StreamSettingsJSON,
+		Sniffing:       inb.SniffingJSON,
+		Tag:            inb.Tag,
+	}
+}
+
+func inboundEquivalent(a db.Inbound, b xui.InboundRecord) bool {
+	return a.Remark == b.Remark &&
+		a.Listen == b.Listen &&
+		a.Port == b.Port &&
+		a.Protocol == b.Protocol &&
+		a.Enable == b.Enable &&
+		a.Total == b.Total &&
+		a.ExpiryTime == b.ExpiryTime &&
+		a.TrafficReset == b.TrafficReset &&
+		settingsWithoutClients(a.SettingsJSON) == settingsWithoutClients(b.Settings) &&
+		a.StreamSettingsJSON == b.StreamSettings &&
+		a.SniffingJSON == b.Sniffing
+}
+
+func settingsWithoutClients(raw string) string {
+	settings := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return raw
+	}
+	if _, ok := settings["clients"]; ok {
+		settings["clients"] = []any{}
+	}
+	b, err := json.Marshal(settings)
+	if err != nil {
+		return raw
+	}
+	return string(b)
+}
+
+func (s Service) syncServerInbounds(ctx context.Context, cli *xui.Client, sv db.Server, mainInbounds []db.Inbound, remote []xui.InboundRecord) ([]db.Inbound, error) {
+	remoteByKey := map[string]xui.InboundRecord{}
+	for _, inb := range remote {
+		key := inboundRecordSyncKey(inb)
+		if key != "" {
+			remoteByKey[key] = inb
+		}
+	}
+	mainKeys := map[string]bool{}
+	for _, main := range mainInbounds {
+		key := inboundSyncKey(main)
+		if key == "" {
+			continue
+		}
+		mainKeys[key] = true
+		remoteInb, ok := remoteByKey[key]
+		record := dbInboundToXUI(main)
+		if !ok {
+			log.Printf("[sync] %s: creating inbound %s", sv.Name, main.Remark)
+			if err := cli.AddInbound(ctx, record); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if !inboundEquivalent(main, remoteInb) {
+			log.Printf("[sync] %s: updating inbound %s", sv.Name, main.Remark)
+			if err := cli.UpdateInbound(ctx, int(remoteInb.ID), record); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for key, remoteInb := range remoteByKey {
+		if mainKeys[key] {
+			continue
+		}
+		log.Printf("[sync] %s: deleting stale inbound %s", sv.Name, remoteInb.Remark)
+		if err := cli.DeleteInbound(ctx, int(remoteInb.ID)); err != nil {
+			return nil, err
+		}
+	}
+	refetched, err := cli.ListInbounds(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.cacheServerInbounds(sv.ID, refetched)
+}
+
+func (s Service) rebuildAssignmentsFromRemote(serverID int64, inbounds []xui.InboundRecord, localByEmail map[string]db.User) error {
+	cached, err := s.cacheServerInbounds(serverID, inbounds)
+	if err != nil {
+		return err
+	}
+	byAPI := inboundsByAPIID(cached)
+	if err := s.DB.DeleteAssignmentsByServer(serverID); err != nil {
+		return err
+	}
+	for _, inb := range inbounds {
+		cachedInb, ok := byAPI[int(inb.ID)]
+		if !ok {
+			continue
+		}
+		settings, ok := xui.ParseInboundSettings(inb.Settings)
+		if !ok {
+			continue
+		}
+		for _, cl := range settings.Clients {
+			u, ok := localByEmail[cl.Email]
+			if !ok {
+				continue
+			}
+			_ = s.DB.CreateAssignment(&db.UserAssignment{
+				UserID:        u.ID,
+				ServerID:      serverID,
+				InboundID:     cachedInb.ID,
+				EmailOnServer: cl.Email,
+				Enable:        cl.Enable,
+			})
+		}
+	}
+	return nil
 }
 
 func upsertClientInSettings(raw string, client xui.InboundClient) string {
@@ -1383,6 +1767,10 @@ type ImportResult struct {
 
 type SyncResult struct {
 	Synced       int           `json:"synced"`
+	Added        int           `json:"added"`
+	Updated      int           `json:"updated"`
+	Attached     int           `json:"attached"`
+	Detached     int           `json:"detached"`
 	Deleted      int           `json:"deleted"`
 	ServerErrors []ServerError `json:"server_errors,omitempty"`
 }
