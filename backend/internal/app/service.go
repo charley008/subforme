@@ -448,6 +448,28 @@ func (s Service) StartProviderUpdater(ctx context.Context) {
 	}()
 }
 
+func (s Service) StartTrafficRefresher(ctx context.Context) {
+	go startTrafficRefresherLoop(ctx, time.Hour, func() {
+		refreshed := s.RefreshTraffic(ctx)
+		log.Printf("[traffic] auto_refresh users=%d", len(refreshed))
+	})
+}
+
+func startTrafficRefresherLoop(ctx context.Context, interval time.Duration, refresh func()) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	refresh()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			refresh()
+		}
+	}
+}
+
 func (s Service) refreshDueProviders(ctx context.Context) {
 	if s.DB == nil {
 		config.RefreshDueProviders(s.ConfigDir)

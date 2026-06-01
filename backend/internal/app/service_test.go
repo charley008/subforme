@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"subforme/backend/internal/config"
 	"subforme/backend/internal/db"
@@ -258,6 +260,32 @@ func TestBuildNodeFromCacheIncludesXHTTPSettings(t *testing.T) {
 	}
 	if node.XHTTPPath != "/xhttp" || node.XHTTPMode != "auto" {
 		t.Fatalf("expected xhttp settings to survive cache build, got %#v", node)
+	}
+}
+
+func TestStartTrafficRefresherLoopRefreshesImmediatelyAndOnInterval(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var calls atomic.Int32
+	done := make(chan struct{})
+	go func() {
+		startTrafficRefresherLoop(ctx, 10*time.Millisecond, func() {
+			if calls.Add(1) >= 2 {
+				cancel()
+			}
+		})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for traffic refresher loop")
+	}
+
+	if got := calls.Load(); got < 2 {
+		t.Fatalf("expected at least 2 refresh calls, got %d", got)
 	}
 }
 

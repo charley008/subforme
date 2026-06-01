@@ -34,7 +34,9 @@ func main() {
 	defer store.Close()
 
 	service := app.NewServiceWithDB(runtimeConfig.ConfigDir, runtimeConfig.XUI, store)
-	service.StartProviderUpdater(context.Background())
+	bgCtx := context.Background()
+	service.StartProviderUpdater(bgCtx)
+	service.StartTrafficRefresher(bgCtx)
 
 	authSvc := &app.StaticAuthService{
 		Username: runtimeConfig.AdminUsername,
