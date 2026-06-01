@@ -1642,6 +1642,9 @@ func buildNodeFromCache(inb db.Inbound, u db.User, host string) xui.Node {
 		ClientFingerprint: firstNonEmpty(stream.RealitySettings.Settings.Fingerprint, stream.TLSSettings.Fingerprint),
 		RealityPublicKey:  stream.RealitySettings.Settings.PublicKey,
 		RealityShortID:    firstOrEmpty(stream.RealitySettings.ShortIds),
+		XHTTPPath:         stream.XHTTPSettings.Path,
+		XHTTPHost:         stream.XHTTPSettings.Host,
+		XHTTPMode:         stream.XHTTPSettings.Mode,
 	}
 	if stream.ALPN != nil {
 		node.ALPN = stream.ALPN

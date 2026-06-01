@@ -44,6 +44,48 @@ rules:
 	}
 }
 
+func TestBuildFinalYAMLMakesXHTTPNodesMihomoCompatible(t *testing.T) {
+	template := `proxies: []
+proxy-groups: []
+rules:
+  - MATCH,DIRECT
+`
+
+	nodes := []xui.Node{
+		{
+			Name:      "hk",
+			Type:      "vless",
+			Server:    "hk.4738.org",
+			Port:      443,
+			UUID:      "036898f6-8f62-46b2-9924-c1b884d6e75d",
+			Network:   "xhttp",
+			UDP:       true,
+			XHTTPPath: "/xhttp",
+			XHTTPMode: "auto",
+		},
+	}
+
+	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "")
+	if err != nil {
+		t.Fatalf("BuildFinalYAML returned error: %v", err)
+	}
+
+	got := string(raw)
+	for _, want := range []string{
+		"name: hk",
+		"network: xhttp",
+		"tls: true",
+		"client-fingerprint: chrome",
+		"xhttp-opts:",
+		"path: /xhttp",
+		"mode: stream-one",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in yaml, got %s", want, got)
+		}
+	}
+}
+
 func TestBuildFinalYAMLAddsDefaultProviderGroup(t *testing.T) {
 	template := `proxies: []
 proxy-groups: []

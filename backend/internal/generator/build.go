@@ -25,13 +25,26 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 	proxies := make([]Proxy, 0, len(nodes))
 	for _, node := range nodes {
 		var encryption *string
-		if node.Network == "xhttp" {
+		isXHTTP := node.Network == "xhttp"
+		if isXHTTP {
 			empty := ""
 			encryption = &empty
 		}
 		alpn := node.ALPN
-		if node.Network == "xhttp" && len(alpn) == 0 {
+		if isXHTTP && len(alpn) == 0 {
 			alpn = []string{"h2"}
+		}
+		tls := node.TLS
+		if isXHTTP {
+			tls = true
+		}
+		clientFingerprint := node.ClientFingerprint
+		if isXHTTP && clientFingerprint == "" {
+			clientFingerprint = "chrome"
+		}
+		xhttpPath := node.XHTTPPath
+		if isXHTTP && xhttpPath == "" {
+			xhttpPath = "/"
 		}
 		proxies = append(proxies, Proxy{
 			Name:              node.Name,
@@ -41,20 +54,20 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 			UUID:              node.UUID,
 			Flow:              node.Flow,
 			Network:           node.Network,
-			TLS:               node.TLS,
+			TLS:               tls,
 			UDP:               node.UDP,
 			ALPN:              alpn,
 			ServerName:        node.ServerName,
-			ClientFingerprint: node.ClientFingerprint,
+			ClientFingerprint: clientFingerprint,
 			Encryption:        encryption,
 			RealityOpts: RealityOpts{
 				PublicKey: node.RealityPublicKey,
 				ShortID:   node.RealityShortID,
 			},
 			XHTTPOpts: XHTTPOpts{
-				Path: node.XHTTPPath,
+				Path: xhttpPath,
 				Host: node.XHTTPHost,
-				Mode: node.XHTTPMode,
+				Mode: normalizeXHTTPMode(node.XHTTPMode),
 			},
 		})
 	}
@@ -113,6 +126,15 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 	}
 
 	return yamlx.Marshal(doc)
+}
+
+func normalizeXHTTPMode(mode string) string {
+	switch mode {
+	case "", "auto":
+		return "stream-one"
+	default:
+		return mode
+	}
 }
 
 func filterInvalidGroupRefs(entries []groupEntry, nodes []xui.Node) []groupEntry {

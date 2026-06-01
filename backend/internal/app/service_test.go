@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"subforme/backend/internal/config"
+	"subforme/backend/internal/db"
 	"subforme/backend/internal/xui"
 )
 
@@ -235,6 +236,28 @@ func TestGenerateWithBaseURLRewritesProviderURL(t *testing.T) {
 	}
 	if !strings.Contains(got, "https://sub.4738.org/api/proxy-providers/airport.yaml") {
 		t.Fatalf("provider URL was not rewritten: %s", got)
+	}
+}
+
+func TestBuildNodeFromCacheIncludesXHTTPSettings(t *testing.T) {
+	node := buildNodeFromCache(
+		db.Inbound{
+			Remark:             "xhttp",
+			Protocol:           "vless",
+			Port:               6444,
+			StreamSettingsJSON: `{"network":"xhttp","security":"none","xhttpSettings":{"path":"/xhttp","host":"","mode":"auto"}}`,
+		},
+		db.User{
+			UUID: "036898f6-8f62-46b2-9924-c1b884d6e75d",
+		},
+		"panel.example.com",
+	)
+
+	if node.Network != "xhttp" {
+		t.Fatalf("expected xhttp network, got %#v", node)
+	}
+	if node.XHTTPPath != "/xhttp" || node.XHTTPMode != "auto" {
+		t.Fatalf("expected xhttp settings to survive cache build, got %#v", node)
 	}
 }
 
