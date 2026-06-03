@@ -168,7 +168,7 @@ export function ServersPage() {
               <th>端口</th>
               <th>状态</th>
               <th>主面板</th>
-              <th>订阅覆盖</th>
+              <th>说明</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -196,7 +196,7 @@ export function ServersPage() {
                   <span className={sv.enabled ? "badge badge-success" : "badge badge-warning"}>{sv.enabled ? "启用" : "停用"}</span>
                 </td>
                 <td>{sv.is_main ? <span className="badge badge-success">主面板</span> : ""}</td>
-                <td style={{ color: "var(--gray-500)" }}>{sv.sub_address ? `${sv.sub_address}:${sv.sub_port || sv.port}` : "无"}</td>
+                <td style={{ color: "var(--gray-500)" }}>{sv.remark || "-"}</td>
                 <td>
                   <div className="btn-group">
                     <button className="btn btn-sm" onClick={() => setEditing({ ...sv })}>
@@ -226,7 +226,7 @@ export function ServersPage() {
           <div className="form-grid" style={{ gap: 12, padding: 16 }}>
             <div className="form-group">
               <label>名称 *</label>
-              <input placeholder="如 JP-01" value={editing.name || ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+              <input placeholder="例如 JP-01" value={editing.name || ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             </div>
             <div className="form-group">
               <label>主机地址 *</label>
@@ -247,27 +247,20 @@ export function ServersPage() {
               <label>Base Path</label>
               <input value={editing.base_path || "/xui/"} onChange={(e) => setEditing({ ...editing, base_path: e.target.value })} />
             </div>
-            <div className="form-group">
+            <div className="form-group" style={{ gridColumn: "1 / -1" }}>
               <label>API Key *</label>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, width: "100%" }}>
                 <input
                   type={showKey ? "text" : "password"}
                   placeholder="Bearer token"
                   value={editing.api_key || ""}
                   onChange={(e) => setEditing({ ...editing, api_key: e.target.value })}
+                  style={{ flex: 1, minWidth: 0 }}
                 />
                 <button type="button" className="btn" onClick={() => setShowKey((v) => !v)}>
                   {showKey ? "隐藏" : "显示"}
                 </button>
               </div>
-            </div>
-            <div className="form-group">
-              <label>订阅地址覆盖</label>
-              <input placeholder="留空=用主机地址" value={editing.sub_address || ""} onChange={(e) => setEditing({ ...editing, sub_address: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label>订阅端口覆盖</label>
-              <input type="number" placeholder="0=用 inbound 实际端口" value={editing.sub_port || 0} onChange={(e) => setEditing({ ...editing, sub_port: parseInt(e.target.value, 10) || 0 })} />
             </div>
             <div className="form-group">
               <label>备注</label>

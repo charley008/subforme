@@ -188,12 +188,12 @@ export function UserPreviewPage() {
               <tr>
                 <th style={{ width: 140 }}>用户</th>
                 <th style={{ width: 250 }}>UUID / 密码</th>
-                <th>节点选择</th>
+                <th style={{ width: 420 }}>节点选择</th>
                 <th style={{ width: 100 }}>分组管理</th>
                 <th style={{ width: 130 }}>第三方订阅</th>
                 <th style={{ width: 110 }}>模式</th>
                 <th style={{ width: 60 }}>预览</th>
-                <th style={{ width: 350 }}>分享</th>
+                <th style={{ width: 260 }}>分享</th>
               </tr>
             </thead>
             <tbody>
@@ -208,7 +208,7 @@ export function UserPreviewPage() {
                   <td>
                     <span style={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-all" }}>{user.uuid || user.password || "-"}</span>
                   </td>
-                  <td>
+                  <td style={{ width: 420 }}>
                     <div className="chip-group">
                       {managedNodes.length === 0 ? <span style={{ color: "#94a3b8", fontSize: 12 }}>请先去节点页添加节点</span> : null}
                       {managedNodes.map((node) => {
@@ -258,10 +258,10 @@ export function UserPreviewPage() {
                       {busyUser === user.email ? "..." : "预览"}
                     </button>
                   </td>
-                  <td>
+                  <td style={{ width: 260 }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       <button type="button" className="btn btn-sm" onClick={() => void handleCopy(user.share_url)} style={{ alignSelf: "flex-start" }}>复制链接</button>
-                      <span style={{ fontSize: 11, color: "#94a3b8", wordBreak: "break-all" }}>{user.share_url}</span>
+                      <span style={{ fontSize: 11, color: "#94a3b8", wordBreak: "break-all", maxWidth: 260 }}>{user.share_url}</span>
                     </div>
                   </td>
                 </tr>
