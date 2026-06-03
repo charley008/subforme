@@ -66,6 +66,33 @@ func TestListClientsReadsGlobalClientAttachments(t *testing.T) {
 	if len(rows) != 1 || rows[0].Email != "arzy" || rows[0].InboundIDs[0] != 1 {
 		t.Fatalf("unexpected rows: %#v", rows)
 	}
+	if rows[0].Traffic.Up != 0 || rows[0].Traffic.Down != 0 {
+		t.Fatalf("expected zero traffic defaults, got %#v", rows[0].Traffic)
+	}
+}
+
+func TestResetAllClientTrafficsUsesGlobalEndpoint(t *testing.T) {
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/panel/api/clients/resetAllTraffics" {
+			http.NotFound(w, r)
+			return
+		}
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "token-1", "", "")
+	client.HTTP = server.Client()
+
+	if err := client.ResetAllClientTraffics(context.Background()); err != nil {
+		t.Fatalf("ResetAllClientTraffics returned error: %v", err)
+	}
+	if gotPath != "/panel/api/clients/resetAllTraffics" {
+		t.Fatalf("unexpected path: %q", gotPath)
+	}
 }
 
 func TestUpdateClientByEmailEscapesEmailAndTriesFallbacks(t *testing.T) {

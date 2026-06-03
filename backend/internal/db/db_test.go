@@ -171,3 +171,40 @@ func TestEnsureServerInboundsPreservesInboundRowIDs(t *testing.T) {
 		t.Fatalf("expected inbound update, got %#v", second[0])
 	}
 }
+
+func TestServerScheduleFieldsPersistAcrossRoundTrip(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	defer store.Close()
+
+	sv := &Server{
+		Name:                       "hk",
+		Scheme:                     "https",
+		Host:                       "panel.example.com",
+		Port:                       2053,
+		BasePath:                   "/xui/",
+		APIKey:                     "token",
+		Enabled:                    true,
+		TrafficSyncIntervalMinutes: 15,
+		AutoResetTrafficEnabled:    true,
+		AutoResetDay:               5,
+		AutoResetHour:              2,
+		AutoResetMinute:            30,
+		AutoResetTimezone:          "Asia/Shanghai",
+		LastTrafficSyncAt:          123,
+		LastTrafficResetKey:        "2026-06",
+	}
+	if err := store.CreateServer(sv); err != nil {
+		t.Fatalf("CreateServer returned error: %v", err)
+	}
+
+	got, err := store.GetServer(sv.ID)
+	if err != nil {
+		t.Fatalf("GetServer returned error: %v", err)
+	}
+	if got.TrafficSyncIntervalMinutes != 15 || !got.AutoResetTrafficEnabled || got.AutoResetDay != 5 || got.AutoResetHour != 2 || got.AutoResetMinute != 30 || got.AutoResetTimezone != "Asia/Shanghai" || got.LastTrafficSyncAt != 123 || got.LastTrafficResetKey != "2026-06" {
+		t.Fatalf("unexpected server schedule fields: %#v", got)
+	}
+}

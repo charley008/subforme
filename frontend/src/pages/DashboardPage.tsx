@@ -33,13 +33,6 @@ type ServerTraffic = {
   down: number;
 };
 
-type ResetResult = {
-  server: string;
-  reset: number;
-  skipped: number;
-  errors?: string[];
-};
-
 const COLORS = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
 
 function formatBytes(bytes: number): string {
@@ -67,11 +60,6 @@ export function DashboardPage() {
   const [message, setMessage] = useState("\u6b63\u5728\u8bfb\u53d6\u670d\u52a1\u6982\u51b5...");
   const [busy, setBusy] = useState(false);
   const maxVal = chart.length > 0 ? Math.max(...chart.map((u) => u.total)) : 1;
-  const visibleServerIDs = useMemo(() => {
-    const ids = new Set<number>();
-    chart.forEach((u) => u.bars.forEach((b) => ids.add(b.server_id)));
-    return ids;
-  }, [chart]);
   const nodeTotals = useMemo<NodeTrafficTotal[]>(() => {
     const totals = new Map<number, NodeTrafficTotal>();
     chart.forEach((user) => {
@@ -97,15 +85,20 @@ export function DashboardPage() {
   }, [nodeTotals, servers]);
   const colorForServer = (serverID: number) => serverColorMap.get(serverID) ?? COLORS[0];
 
+  async function loadTrafficSummary() {
+    const rows = await getJSON<UserBars[]>("/api/dashboard/traffic").catch(() => [] as UserBars[]);
+    setChart(rows);
+    return rows;
+  }
+
   async function loadDashboard() {
     try {
       const [s, c, serverList] = await Promise.all([
         getJSON<DashboardSummary>("/api/dashboard/summary"),
-        getJSON<UserBars[]>("/api/dashboard/traffic").catch(() => [] as UserBars[]),
+        loadTrafficSummary(),
         getJSON<Server[]>("/api/servers").catch(() => [] as Server[]),
       ]);
       setSummary(s);
-      setChart(c);
       setServers(serverList);
       setMessage(`\u5171 ${c.length} \u4e2a\u7528\u6237\u6709\u6d41\u91cf\u6570\u636e`);
     } catch (error) {
@@ -127,20 +120,6 @@ export function DashboardPage() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "\u5237\u65b0\u6d41\u91cf\u5931\u8d25");
     } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleResetServer(server: Server) {
-    if (!confirm(`\u786e\u5b9a\u91cd\u7f6e ${server.name} \u4e0a\u5df2\u5173\u8054\u7528\u6237\u7684\u6d41\u91cf\uff1f`)) return;
-    setBusy(true);
-    try {
-      const result = await postJSON<ResetResult>(`/api/traffic/reset-server/${server.id}`);
-      const errMsg = result.errors?.length ? `, ${result.errors.length} \u4e2a\u5931\u8d25` : "";
-      setMessage(`${result.server} \u5df2\u91cd\u7f6e ${result.reset} \u4e2a\u7528\u6237, \u8df3\u8fc7 ${result.skipped} \u4e2a${errMsg}`);
-      await handleRefreshTraffic();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "\u91cd\u7f6e\u6d41\u91cf\u5931\u8d25");
       setBusy(false);
     }
   }
@@ -221,13 +200,6 @@ export function DashboardPage() {
         <div className="card" style={{ marginTop: 20 }}>
           <div className="card-header">
             <h2>{"\u7528\u6237\u6d41\u91cf"}</h2>
-            <div className="page-actions">
-              {servers.filter((server) => visibleServerIDs.has(server.id)).map((server) => (
-                <button key={server.id} type="button" className="btn btn-sm" onClick={() => void handleResetServer(server)} disabled={busy}>
-                  {`${server.name} \u91cd\u7f6e\u7528\u6237\u6d41\u91cf`}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="card-body" style={{ padding: "16px 20px" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

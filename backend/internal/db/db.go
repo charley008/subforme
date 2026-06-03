@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 6
+const schemaVersion = 7
 
 type Store struct {
 	DB *sql.DB
@@ -69,6 +69,7 @@ func (s *Store) migrate() error {
 		{version: 4, run: s.migrateV4},
 		{version: 5, run: s.migrateV5},
 		{version: 6, run: s.migrateV6},
+		{version: 7, run: s.migrateV7},
 	}
 
 	for _, migration := range migrations {
@@ -83,6 +84,26 @@ func (s *Store) migrate() error {
 	}
 
 	return nil
+}
+
+func (s *Store) migrateV7() error {
+	statements := []string{
+		`ALTER TABLE servers ADD COLUMN traffic_sync_interval_minutes INTEGER DEFAULT 60`,
+		`ALTER TABLE servers ADD COLUMN auto_reset_traffic_enabled INTEGER DEFAULT 0`,
+		`ALTER TABLE servers ADD COLUMN auto_reset_day INTEGER DEFAULT 1`,
+		`ALTER TABLE servers ADD COLUMN auto_reset_hour INTEGER DEFAULT 0`,
+		`ALTER TABLE servers ADD COLUMN auto_reset_minute INTEGER DEFAULT 0`,
+		`ALTER TABLE servers ADD COLUMN auto_reset_timezone TEXT DEFAULT 'Asia/Shanghai'`,
+		`ALTER TABLE servers ADD COLUMN last_traffic_sync_at INTEGER DEFAULT 0`,
+		`ALTER TABLE servers ADD COLUMN last_traffic_reset_key TEXT DEFAULT ''`,
+	}
+	for _, stmt := range statements {
+		if _, err := s.DB.Exec(stmt); err != nil {
+			continue
+		}
+	}
+	_, err := s.DB.Exec("INSERT INTO schema_version (version, applied_at) VALUES (7, ?)", time.Now().Unix())
+	return err
 }
 
 func (s *Store) migrateV6() error {
@@ -216,6 +237,14 @@ func (s *Store) migrateV1() error {
 			is_main     INTEGER DEFAULT 0,
 			remark      TEXT DEFAULT '',
 			enabled     INTEGER DEFAULT 1,
+			traffic_sync_interval_minutes INTEGER DEFAULT 60,
+			auto_reset_traffic_enabled INTEGER DEFAULT 0,
+			auto_reset_day INTEGER DEFAULT 1,
+			auto_reset_hour INTEGER DEFAULT 0,
+			auto_reset_minute INTEGER DEFAULT 0,
+			auto_reset_timezone TEXT DEFAULT 'Asia/Shanghai',
+			last_traffic_sync_at INTEGER DEFAULT 0,
+			last_traffic_reset_key TEXT DEFAULT '',
 			created_at  INTEGER NOT NULL,
 			updated_at  INTEGER NOT NULL
 		)`,

@@ -109,6 +109,11 @@ type ClientListRecord struct {
 	CreatedAt  int64  `json:"createdAt"`
 	UpdatedAt  int64  `json:"updatedAt"`
 	InboundIDs []int  `json:"inboundIds"`
+	Traffic    struct {
+		Up     int64 `json:"up"`
+		Down   int64 `json:"down"`
+		Enable bool  `json:"enable"`
+	} `json:"traffic"`
 }
 
 type clientListResponse struct {

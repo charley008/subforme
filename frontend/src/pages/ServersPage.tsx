@@ -14,6 +14,14 @@ type Server = {
   is_main: boolean;
   remark: string;
   enabled: boolean;
+  traffic_sync_interval_minutes: number;
+  auto_reset_traffic_enabled: boolean;
+  auto_reset_day: number;
+  auto_reset_hour: number;
+  auto_reset_minute: number;
+  auto_reset_timezone: string;
+  last_traffic_sync_at: number;
+  last_traffic_reset_key: string;
   created_at: number;
   updated_at: number;
 };
@@ -41,6 +49,12 @@ const emptyServer: Partial<Server> = {
   base_path: "/xui/",
   enabled: true,
   is_main: false,
+  traffic_sync_interval_minutes: 60,
+  auto_reset_traffic_enabled: false,
+  auto_reset_day: 1,
+  auto_reset_hour: 0,
+  auto_reset_minute: 0,
+  auto_reset_timezone: "Asia/Shanghai",
 };
 
 export function ServersPage() {
@@ -258,6 +272,63 @@ export function ServersPage() {
             <div className="form-group">
               <label>备注</label>
               <input value={editing.remark || ""} onChange={(e) => setEditing({ ...editing, remark: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label>流量刷新间隔（分钟）</label>
+              <input
+                type="number"
+                min={1}
+                value={editing.traffic_sync_interval_minutes || 60}
+                onChange={(e) => setEditing({ ...editing, traffic_sync_interval_minutes: parseInt(e.target.value, 10) || 60 })}
+              />
+            </div>
+            <div className="form-group">
+              <label>清零时区</label>
+              <input
+                placeholder="Asia/Shanghai"
+                value={editing.auto_reset_timezone || "Asia/Shanghai"}
+                onChange={(e) => setEditing({ ...editing, auto_reset_timezone: e.target.value })}
+              />
+            </div>
+            <div className="form-group">
+              <label>每月清零日期</label>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={editing.auto_reset_day || 1}
+                onChange={(e) => setEditing({ ...editing, auto_reset_day: parseInt(e.target.value, 10) || 1 })}
+              />
+            </div>
+            <div className="form-group">
+              <label>清零小时</label>
+              <input
+                type="number"
+                min={0}
+                max={23}
+                value={editing.auto_reset_hour ?? 0}
+                onChange={(e) => setEditing({ ...editing, auto_reset_hour: parseInt(e.target.value, 10) || 0 })}
+              />
+            </div>
+            <div className="form-group">
+              <label>清零分钟</label>
+              <input
+                type="number"
+                min={0}
+                max={59}
+                value={editing.auto_reset_minute ?? 0}
+                onChange={(e) => setEditing({ ...editing, auto_reset_minute: parseInt(e.target.value, 10) || 0 })}
+              />
+            </div>
+            <div className="form-group" style={{ justifyContent: "end" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 38 }}>
+                <input
+                  type="checkbox"
+                  checked={editing.auto_reset_traffic_enabled || false}
+                  onChange={(e) => setEditing({ ...editing, auto_reset_traffic_enabled: e.target.checked })}
+                />
+                启用每月自动清零
+              </label>
             </div>
             <div className="form-group" style={{ justifyContent: "end" }}>
               <label style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 38 }}>

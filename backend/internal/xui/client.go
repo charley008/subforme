@@ -272,6 +272,10 @@ func (c *Client) ResetClientTraffic(ctx context.Context, email string) error {
 	return c.postJSONCandidates(ctx, c.clientActionCandidates("resetTraffic/"+url.PathEscape(email)), "", "reset client traffic")
 }
 
+func (c *Client) ResetAllClientTraffics(ctx context.Context) error {
+	return c.postJSONCandidates(ctx, c.clientActionCandidates("resetAllTraffics"), "", "reset all client traffic")
+}
+
 func (c *Client) AttachClient(ctx context.Context, email string, inboundIDs []int) error {
 	if len(inboundIDs) == 0 {
 		return nil

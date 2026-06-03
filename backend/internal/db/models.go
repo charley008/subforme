@@ -2,20 +2,28 @@ package db
 
 // Server represents a 3x-ui panel (VPS) connection.
 type Server struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	Scheme     string `json:"scheme"`
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	BasePath   string `json:"base_path"`
-	APIKey     string `json:"api_key,omitempty"`
-	SubAddress string `json:"sub_address,omitempty"`
-	SubPort    int    `json:"sub_port,omitempty"`
-	IsMain     bool   `json:"is_main"`
-	Remark     string `json:"remark,omitempty"`
-	Enabled    bool   `json:"enabled"`
-	CreatedAt  int64  `json:"created_at"`
-	UpdatedAt  int64  `json:"updated_at"`
+	ID                         int64  `json:"id"`
+	Name                       string `json:"name"`
+	Scheme                     string `json:"scheme"`
+	Host                       string `json:"host"`
+	Port                       int    `json:"port"`
+	BasePath                   string `json:"base_path"`
+	APIKey                     string `json:"api_key,omitempty"`
+	SubAddress                 string `json:"sub_address,omitempty"`
+	SubPort                    int    `json:"sub_port,omitempty"`
+	IsMain                     bool   `json:"is_main"`
+	Remark                     string `json:"remark,omitempty"`
+	Enabled                    bool   `json:"enabled"`
+	TrafficSyncIntervalMinutes int    `json:"traffic_sync_interval_minutes"`
+	AutoResetTrafficEnabled    bool   `json:"auto_reset_traffic_enabled"`
+	AutoResetDay               int    `json:"auto_reset_day"`
+	AutoResetHour              int    `json:"auto_reset_hour"`
+	AutoResetMinute            int    `json:"auto_reset_minute"`
+	AutoResetTimezone          string `json:"auto_reset_timezone,omitempty"`
+	LastTrafficSyncAt          int64  `json:"last_traffic_sync_at"`
+	LastTrafficResetKey        string `json:"last_traffic_reset_key,omitempty"`
+	CreatedAt                  int64  `json:"created_at"`
+	UpdatedAt                  int64  `json:"updated_at"`
 }
 
 // Inbound is a cached inbound config from a 3x-ui panel.

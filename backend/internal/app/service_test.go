@@ -263,14 +263,14 @@ func TestBuildNodeFromCacheIncludesXHTTPSettings(t *testing.T) {
 	}
 }
 
-func TestStartTrafficRefresherLoopRefreshesImmediatelyAndOnInterval(t *testing.T) {
+func TestStartTrafficSchedulerLoopRefreshesImmediatelyAndOnInterval(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	var calls atomic.Int32
 	done := make(chan struct{})
 	go func() {
-		startTrafficRefresherLoop(ctx, 10*time.Millisecond, func() {
+		startTrafficSchedulerLoop(ctx, 10*time.Millisecond, func() {
 			if calls.Add(1) >= 2 {
 				cancel()
 			}
@@ -286,6 +286,40 @@ func TestStartTrafficRefresherLoopRefreshesImmediatelyAndOnInterval(t *testing.T
 
 	if got := calls.Load(); got < 2 {
 		t.Fatalf("expected at least 2 refresh calls, got %d", got)
+	}
+}
+
+func TestShouldSyncServerTrafficUsesServerInterval(t *testing.T) {
+	now := time.Now().Unix()
+	sv := db.Server{TrafficSyncIntervalMinutes: 30, LastTrafficSyncAt: now - 29*60}
+	if shouldSyncServerTraffic(now, sv) {
+		t.Fatal("expected sync to wait until interval is reached")
+	}
+	sv.LastTrafficSyncAt = now - 30*60
+	if !shouldSyncServerTraffic(now, sv) {
+		t.Fatal("expected sync once interval is reached")
+	}
+}
+
+func TestShouldResetServerTrafficUsesMonthlyKey(t *testing.T) {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		t.Fatalf("load location: %v", err)
+	}
+	now := time.Date(2026, 6, 3, 12, 5, 0, 0, loc)
+	sv := db.Server{
+		AutoResetTrafficEnabled: true,
+		AutoResetDay:            3,
+		AutoResetHour:           12,
+		AutoResetMinute:         0,
+		AutoResetTimezone:       "Asia/Shanghai",
+	}
+	if !shouldResetServerTraffic(now, sv) {
+		t.Fatal("expected reset to be due once scheduled time has passed")
+	}
+	sv.LastTrafficResetKey = "2026-06"
+	if shouldResetServerTraffic(now, sv) {
+		t.Fatal("expected reset to run only once per month")
 	}
 }
 

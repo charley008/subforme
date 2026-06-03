@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"strings"
 	"time"
 
@@ -15,6 +16,8 @@ import (
 	"subforme/backend/internal/groups"
 	"subforme/backend/internal/xui"
 )
+
+const trafficRefreshRequestTimeout = 5 * time.Second
 
 type XUIResolver interface {
 	ResolveUserNodes(ctx context.Context, query string) ([]xui.Node, error)
@@ -449,13 +452,15 @@ func (s Service) StartProviderUpdater(ctx context.Context) {
 }
 
 func (s Service) StartTrafficRefresher(ctx context.Context) {
-	go startTrafficRefresherLoop(ctx, time.Hour, func() {
-		refreshed := s.RefreshTraffic(ctx)
-		log.Printf("[traffic] auto_refresh users=%d", len(refreshed))
+	go startTrafficSchedulerLoop(ctx, time.Minute, func() {
+		refreshed, resets := s.RunTrafficMaintenance(ctx)
+		if refreshed > 0 || resets > 0 {
+			log.Printf("[traffic] maintenance refreshed=%d reset=%d", refreshed, resets)
+		}
 	})
 }
 
-func startTrafficRefresherLoop(ctx context.Context, interval time.Duration, refresh func()) {
+func startTrafficSchedulerLoop(ctx context.Context, interval time.Duration, refresh func()) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -468,6 +473,46 @@ func startTrafficRefresherLoop(ctx context.Context, interval time.Duration, refr
 			refresh()
 		}
 	}
+}
+
+func (s Service) RunTrafficMaintenance(ctx context.Context) (int, int) {
+	if s.DB == nil {
+		refreshed := s.RefreshTraffic(ctx)
+		return len(refreshed), 0
+	}
+
+	servers, err := s.DB.ListServers()
+	if err != nil {
+		return 0, 0
+	}
+
+	now := time.Now()
+	refreshed := 0
+	resets := 0
+	for _, sv := range servers {
+		if !sv.Enabled {
+			continue
+		}
+
+		if shouldResetServerTraffic(now, sv) {
+			result, err := s.resetAllServerTraffic(ctx, sv)
+			if err != nil {
+				log.Printf("[traffic] auto_reset server=%s error=%v", sv.Name, err)
+			} else {
+				log.Printf("[traffic] auto_reset server=%s reset=%d", sv.Name, result.Reset)
+				resets++
+			}
+		}
+
+		if shouldSyncServerTraffic(now.Unix(), sv) {
+			if _, err := s.refreshTrafficForServer(ctx, sv); err != nil {
+				log.Printf("[traffic] auto_sync server=%s error=%v", sv.Name, err)
+				continue
+			}
+			refreshed++
+		}
+	}
+	return refreshed, resets
 }
 
 func (s Service) refreshDueProviders(ctx context.Context) {
@@ -642,52 +687,66 @@ func applyManagedNodes(templateNodes []xui.Node, managedNodes []config.ManagedNo
 
 // RefreshTraffic fetches live traffic from all servers, stores in DB, and returns per-user data.
 func (s Service) RefreshTraffic(ctx context.Context) map[string][]db.ServerTraffic {
-	result := map[string][]db.ServerTraffic{}
-	servers, err := s.DB.ListServers()
-	if err != nil {
-		return result
+	if s.DB == nil {
+		return map[string][]db.ServerTraffic{}
 	}
 
-	var trafficEntries []db.UserTraffic
+	servers, err := s.DB.ListServers()
+	if err != nil {
+		return map[string][]db.ServerTraffic{}
+	}
+
+	var wg sync.WaitGroup
 	for _, sv := range servers {
 		if !sv.Enabled {
 			continue
 		}
-		cli := xui.NewClient(s.xuiURL(&sv), sv.APIKey, "", "")
-		inbounds, err := cli.ListInbounds(ctx)
-		if err != nil {
-			log.Printf("[traffic] %s: %v", sv.Name, err)
+		sv := sv
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := s.refreshTrafficForServer(ctx, sv); err != nil {
+				log.Printf("[traffic] %s: %v", sv.Name, err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	return s.LoadTraffic(ctx)
+}
+
+func (s Service) refreshTrafficForServer(ctx context.Context, sv db.Server) ([]db.UserTraffic, error) {
+	start := time.Now()
+	requestCtx, cancel := context.WithTimeout(ctx, trafficRefreshRequestTimeout)
+	defer cancel()
+
+	cli := xui.NewClient(s.xuiURL(&sv), sv.APIKey, "", "")
+	clients, err := cli.ListClients(requestCtx)
+	if err != nil {
+		return nil, fmt.Errorf("refresh timeout_or_fetch_error after %s: %w", time.Since(start).Round(time.Millisecond), err)
+	}
+
+	entries := make([]db.UserTraffic, 0, len(clients))
+	for _, client := range clients {
+		if client.Email == "" {
 			continue
 		}
-		for _, inb := range inbounds {
-			for _, cs := range inb.ClientStats {
-				if cs.Email == "" {
-					continue
-				}
-				st := db.ServerTraffic{
-					ServerID:      sv.ID,
-					ServerName:    sv.Name,
-					ServerAddress: sv.Host,
-					Up:            cs.Up,
-					Down:          cs.Down,
-				}
-				result[cs.Email] = append(result[cs.Email], st)
-				trafficEntries = append(trafficEntries, db.UserTraffic{
-					Email:    cs.Email,
-					ServerID: sv.ID,
-					Up:       cs.Up,
-					Down:     cs.Down,
-				})
-			}
-		}
+		entries = append(entries, db.UserTraffic{
+			Email:    client.Email,
+			ServerID: sv.ID,
+			Up:       client.Traffic.Up,
+			Down:     client.Traffic.Down,
+		})
 	}
 
-	// Store in DB (delete old, insert fresh)
-	if err := s.DB.ReplaceUserTraffic(trafficEntries); err != nil {
-		log.Printf("[traffic] store error: %v", err)
+	if err := s.DB.ReplaceUserTrafficForServer(sv.ID, entries); err != nil {
+		return nil, fmt.Errorf("store traffic: %w", err)
 	}
-
-	return result
+	if err := s.DB.UpdateServerTrafficSyncAt(sv.ID, time.Now().Unix()); err != nil {
+		log.Printf("[traffic] update sync marker server=%s: %v", sv.Name, err)
+	}
+	log.Printf("[traffic] refreshed server=%s clients=%d duration=%s", sv.Name, len(entries), time.Since(start).Round(time.Millisecond))
+	return entries, nil
 }
 
 // LoadTraffic returns stored traffic data (without fetching from servers).
@@ -728,24 +787,86 @@ func (s Service) ResetServerUserTraffic(ctx context.Context, serverID int64) (*T
 	if err != nil {
 		return nil, fmt.Errorf("get server: %w", err)
 	}
-	cli := xui.NewClient(s.xuiURL(sv), sv.APIKey, "", "")
+	return s.resetAllServerTraffic(ctx, *sv)
+}
+
+func (s Service) resetAllServerTraffic(ctx context.Context, sv db.Server) (*TrafficResetResult, error) {
+	cli := xui.NewClient(s.xuiURL(&sv), sv.APIKey, "", "")
 	clients, err := cli.ListClients(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list clients: %w", err)
 	}
 	result := &TrafficResetResult{Server: sv.Name}
 	for _, client := range clients {
-		if client.Email == "" || len(client.InboundIDs) == 0 {
+		if client.Email == "" {
 			result.Skipped++
-			continue
-		}
-		if err := cli.ResetClientTraffic(ctx, client.Email); err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", client.Email, err))
 			continue
 		}
 		result.Reset++
 	}
+	if err := cli.ResetAllClientTraffics(ctx); err != nil {
+		return nil, fmt.Errorf("reset all client traffic: %w", err)
+	}
+	if err := s.DB.ZeroAllUserTrafficForServer(sv.ID); err != nil {
+		return nil, fmt.Errorf("zero cached traffic: %w", err)
+	}
+	if err := s.DB.UpdateServerTrafficSyncAt(sv.ID, time.Now().Unix()); err != nil {
+		log.Printf("[traffic] update sync marker after reset server=%s: %v", sv.Name, err)
+	}
+	if sv.AutoResetTrafficEnabled {
+		if err := s.DB.UpdateServerTrafficResetKey(sv.ID, scheduledResetKey(time.Now(), sv.AutoResetTimezone)); err != nil {
+			log.Printf("[traffic] update reset marker server=%s: %v", sv.Name, err)
+		}
+	}
 	return result, nil
+}
+
+func shouldSyncServerTraffic(nowUnix int64, sv db.Server) bool {
+	interval := sv.TrafficSyncIntervalMinutes
+	if interval <= 0 {
+		interval = 60
+	}
+	if sv.LastTrafficSyncAt <= 0 {
+		return true
+	}
+	return nowUnix-sv.LastTrafficSyncAt >= int64(interval*60)
+}
+
+func shouldResetServerTraffic(now time.Time, sv db.Server) bool {
+	if !sv.AutoResetTrafficEnabled {
+		return false
+	}
+	loc, err := time.LoadLocation(sv.AutoResetTimezone)
+	if err != nil {
+		loc = time.Local
+	}
+	localNow := now.In(loc)
+	scheduledDay := clampDay(localNow.Year(), localNow.Month(), sv.AutoResetDay)
+	scheduledAt := time.Date(localNow.Year(), localNow.Month(), scheduledDay, sv.AutoResetHour, sv.AutoResetMinute, 0, 0, loc)
+	if localNow.Before(scheduledAt) {
+		return false
+	}
+	return sv.LastTrafficResetKey != scheduledResetKey(now, sv.AutoResetTimezone)
+}
+
+func scheduledResetKey(now time.Time, timezone string) string {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.Local
+	}
+	localNow := now.In(loc)
+	return fmt.Sprintf("%04d-%02d", localNow.Year(), int(localNow.Month()))
+}
+
+func clampDay(year int, month time.Month, day int) int {
+	if day <= 0 {
+		day = 1
+	}
+	lastDay := time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day()
+	if day > lastDay {
+		return lastDay
+	}
+	return day
 }
 
 func (s Service) DBUserSearch(query string) ([]db.User, error) {
