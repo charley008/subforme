@@ -48,6 +48,7 @@ func (s *Store) SaveAppBaseConfig(cfg config.AppConfig) error {
 	cfg.UserNodes = nil
 	cfg.UserProviders = nil
 	cfg.UserGroupNodes = nil
+	cfg.UserGroupModes = nil
 	return s.saveJSONSetting(appConfigKey, cfg)
 }
 
@@ -65,6 +66,7 @@ func (s *Store) LoadAppConfigFromDB(fallback config.AppConfig) (config.AppConfig
 	cfg.UserNodes = map[string][]string{}
 	cfg.UserProviders = map[string][]string{}
 	cfg.UserGroupNodes = map[string]map[string][]string{}
+	cfg.UserGroupModes = map[string]map[string]string{}
 	for _, u := range users {
 		if u.Mode != "" {
 			cfg.UserModes[u.Email] = u.Mode
@@ -77,6 +79,9 @@ func (s *Store) LoadAppConfigFromDB(fallback config.AppConfig) (config.AppConfig
 		}
 		if values := decodeGroupNodes(u.GroupNodesJSON); len(values) > 0 {
 			cfg.UserGroupNodes[u.Email] = values
+		}
+		if values := decodeStringMap(u.GroupModesJSON); len(values) > 0 {
+			cfg.UserGroupModes[u.Email] = values
 		}
 	}
 	return cfg, found, nil
@@ -94,6 +99,7 @@ func (s *Store) SaveAppConfigToDB(cfg config.AppConfig) error {
 	base.UserNodes = nil
 	base.UserProviders = nil
 	base.UserGroupNodes = nil
+	base.UserGroupModes = nil
 	if err := saveJSONSettingTx(tx, appConfigKey, base); err != nil {
 		return err
 	}
@@ -123,11 +129,12 @@ func (s *Store) SaveAppConfigToDB(cfg config.AppConfig) error {
 		nodeIDs := encodeJSON(cfg.UserNodes[u.email])
 		providerIDs := encodeJSON(cfg.UserProviders[u.email])
 		groupNodes := encodeJSON(cfg.UserGroupNodes[u.email])
+		groupModes := encodeJSON(cfg.UserGroupModes[u.email])
 		if _, err := tx.Exec(`
 			UPDATE users
-			SET mode = ?, node_ids_json = ?, provider_ids_json = ?, group_nodes_json = ?, updated_at = ?
+			SET mode = ?, node_ids_json = ?, provider_ids_json = ?, group_nodes_json = ?, group_modes_json = ?, updated_at = ?
 			WHERE id = ?
-		`, mode, nodeIDs, providerIDs, groupNodes, time.Now().Unix(), u.id); err != nil {
+		`, mode, nodeIDs, providerIDs, groupNodes, groupModes, time.Now().Unix(), u.id); err != nil {
 			return err
 		}
 	}
@@ -349,6 +356,7 @@ func (s *Store) CleanupGroupPrefs(validGroups []string) error {
 	}
 	for _, u := range users {
 		groups := decodeGroupNodes(u.GroupNodesJSON)
+		groupModes := decodeStringMap(u.GroupModesJSON)
 		changed := false
 		for name := range groups {
 			if _, ok := valid[name]; !ok {
@@ -356,10 +364,16 @@ func (s *Store) CleanupGroupPrefs(validGroups []string) error {
 				changed = true
 			}
 		}
+		for name := range groupModes {
+			if _, ok := valid[name]; !ok {
+				delete(groupModes, name)
+				changed = true
+			}
+		}
 		if changed {
 			if _, err := s.DB.Exec(`
-				UPDATE users SET group_nodes_json = ?, updated_at = ? WHERE id = ?
-			`, encodeJSON(groups), time.Now().Unix(), u.ID); err != nil {
+				UPDATE users SET group_nodes_json = ?, group_modes_json = ?, updated_at = ? WHERE id = ?
+			`, encodeJSON(groups), encodeJSON(groupModes), time.Now().Unix(), u.ID); err != nil {
 				return err
 			}
 		}
@@ -576,6 +590,15 @@ func decodeStringSlice(raw string) []string {
 
 func decodeGroupNodes(raw string) map[string][]string {
 	var out map[string][]string
+	if raw == "" {
+		return nil
+	}
+	_ = json.Unmarshal([]byte(raw), &out)
+	return out
+}
+
+func decodeStringMap(raw string) map[string]string {
+	var out map[string]string
 	if raw == "" {
 		return nil
 	}

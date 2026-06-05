@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 7
+const schemaVersion = 8
 
 type Store struct {
 	DB *sql.DB
@@ -70,6 +70,7 @@ func (s *Store) migrate() error {
 		{version: 5, run: s.migrateV5},
 		{version: 6, run: s.migrateV6},
 		{version: 7, run: s.migrateV7},
+		{version: 8, run: s.migrateV8},
 	}
 
 	for _, migration := range migrations {
@@ -84,6 +85,19 @@ func (s *Store) migrate() error {
 	}
 
 	return nil
+}
+
+func (s *Store) migrateV8() error {
+	statements := []string{
+		`ALTER TABLE users ADD COLUMN group_modes_json TEXT DEFAULT ''`,
+	}
+	for _, stmt := range statements {
+		if _, err := s.DB.Exec(stmt); err != nil {
+			continue
+		}
+	}
+	_, err := s.DB.Exec("INSERT INTO schema_version (version, applied_at) VALUES (8, ?)", time.Now().Unix())
+	return err
 }
 
 func (s *Store) migrateV7() error {
@@ -128,6 +142,7 @@ func (s *Store) migrateV5() error {
 		`ALTER TABLE users ADD COLUMN node_ids_json TEXT DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN provider_ids_json TEXT DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN group_nodes_json TEXT DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN group_modes_json TEXT DEFAULT ''`,
 		`CREATE TABLE IF NOT EXISTS app_settings (
 			key        TEXT PRIMARY KEY,
 			value      TEXT NOT NULL,
@@ -284,6 +299,11 @@ func (s *Store) migrateV1() error {
 			reset       INTEGER DEFAULT 0,
 			comment     TEXT DEFAULT '',
 			enable      INTEGER DEFAULT 1,
+			mode        TEXT DEFAULT '',
+			node_ids_json TEXT DEFAULT '',
+			provider_ids_json TEXT DEFAULT '',
+			group_nodes_json TEXT DEFAULT '',
+			group_modes_json TEXT DEFAULT '',
 			created_at  INTEGER NOT NULL,
 			updated_at  INTEGER NOT NULL
 		)`,

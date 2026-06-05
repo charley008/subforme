@@ -11,12 +11,12 @@ func (s *Store) CreateUser(u *User) error {
 		INSERT INTO users (email, uuid, password, auth, flow, security, remark,
 		                   total_gb, expiry_time, limit_ip, sub_id, tg_id,
 		                   reset, comment, enable, mode, node_ids_json,
-		                   provider_ids_json, group_nodes_json, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		                   provider_ids_json, group_nodes_json, group_modes_json, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, u.Email, u.UUID, u.Password, u.Auth, u.Flow, u.Security, u.Remark,
 		u.TotalGB, u.ExpiryTime, u.LimitIP, u.SubID, u.TgID,
 		u.Reset, u.Comment, boolToInt(u.Enable), u.Mode, u.NodeIDsJSON,
-		u.ProviderIDsJSON, u.GroupNodesJSON, now, now)
+		u.ProviderIDsJSON, u.GroupNodesJSON, u.GroupModesJSON, now, now)
 	if err != nil {
 		return err
 	}
@@ -41,19 +41,22 @@ func (s *Store) UpdateUser(u *User) error {
 		if u.GroupNodesJSON == "" {
 			u.GroupNodesJSON = current.GroupNodesJSON
 		}
+		if u.GroupModesJSON == "" {
+			u.GroupModesJSON = current.GroupModesJSON
+		}
 	}
 	u.UpdatedAt = time.Now().Unix()
 	_, err := s.DB.Exec(`
 		UPDATE users SET email=?, uuid=?, password=?, auth=?, flow=?, security=?,
 		       remark=?, total_gb=?, expiry_time=?, limit_ip=?, sub_id=?,
 		       tg_id=?, reset=?, comment=?, enable=?, mode=?,
-		       node_ids_json=?, provider_ids_json=?, group_nodes_json=?,
+		       node_ids_json=?, provider_ids_json=?, group_nodes_json=?, group_modes_json=?,
 		       updated_at=?
 		WHERE id=?
 	`, u.Email, u.UUID, u.Password, u.Auth, u.Flow, u.Security, u.Remark,
 		u.TotalGB, u.ExpiryTime, u.LimitIP, u.SubID, u.TgID,
 		u.Reset, u.Comment, boolToInt(u.Enable), u.Mode, u.NodeIDsJSON,
-		u.ProviderIDsJSON, u.GroupNodesJSON, u.UpdatedAt, u.ID)
+		u.ProviderIDsJSON, u.GroupNodesJSON, u.GroupModesJSON, u.UpdatedAt, u.ID)
 	return err
 }
 
@@ -80,7 +83,7 @@ func (s *Store) ListUsers() ([]User, error) {
 		       total_gb, expiry_time, limit_ip, COALESCE(sub_id,''),
 		       COALESCE(tg_id,0), COALESCE(reset,0), COALESCE(comment,''),
 		       enable, COALESCE(mode,''), COALESCE(node_ids_json,''),
-		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''),
+		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''), COALESCE(group_modes_json,''),
 		       created_at, updated_at
 		FROM users ORDER BY email
 	`)
@@ -99,7 +102,7 @@ func (s *Store) ListEnabledUsers() ([]User, error) {
 		       total_gb, expiry_time, limit_ip, COALESCE(sub_id,''),
 		       COALESCE(tg_id,0), COALESCE(reset,0), COALESCE(comment,''),
 		       enable, COALESCE(mode,''), COALESCE(node_ids_json,''),
-		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''),
+		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''), COALESCE(group_modes_json,''),
 		       created_at, updated_at
 		FROM users WHERE enable = 1 ORDER BY email
 	`)
@@ -119,14 +122,14 @@ func (s *Store) GetUserByEmail(email string) (*User, error) {
 		       total_gb, expiry_time, limit_ip, COALESCE(sub_id,''),
 		       COALESCE(tg_id,0), COALESCE(reset,0), COALESCE(comment,''),
 		       enable, COALESCE(mode,''), COALESCE(node_ids_json,''),
-		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''),
+		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''), COALESCE(group_modes_json,''),
 		       created_at, updated_at
-		FROM users WHERE email = ?
+	FROM users WHERE email = ?
 	`, email).Scan(&u.ID, &u.Email, &u.UUID, &u.Password, &u.Auth,
 		&u.Flow, &u.Security, &u.Remark, &u.TotalGB, &u.ExpiryTime,
 		&u.LimitIP, &u.SubID, &u.TgID, &u.Reset, &u.Comment,
 		&u.Enable, &u.Mode, &u.NodeIDsJSON, &u.ProviderIDsJSON,
-		&u.GroupNodesJSON, &u.CreatedAt, &u.UpdatedAt)
+		&u.GroupNodesJSON, &u.GroupModesJSON, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -141,14 +144,14 @@ func (s *Store) GetUser(id int64) (*User, error) {
 		       total_gb, expiry_time, limit_ip, COALESCE(sub_id,''),
 		       COALESCE(tg_id,0), COALESCE(reset,0), COALESCE(comment,''),
 		       enable, COALESCE(mode,''), COALESCE(node_ids_json,''),
-		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''),
+		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''), COALESCE(group_modes_json,''),
 		       created_at, updated_at
-		FROM users WHERE id = ?
+	FROM users WHERE id = ?
 	`, id).Scan(&u.ID, &u.Email, &u.UUID, &u.Password, &u.Auth,
 		&u.Flow, &u.Security, &u.Remark, &u.TotalGB, &u.ExpiryTime,
 		&u.LimitIP, &u.SubID, &u.TgID, &u.Reset, &u.Comment,
 		&u.Enable, &u.Mode, &u.NodeIDsJSON, &u.ProviderIDsJSON,
-		&u.GroupNodesJSON, &u.CreatedAt, &u.UpdatedAt)
+		&u.GroupNodesJSON, &u.GroupModesJSON, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +166,7 @@ func (s *Store) SearchUsers(query string) ([]User, error) {
 		       total_gb, expiry_time, limit_ip, COALESCE(sub_id,''),
 		       COALESCE(tg_id,0), COALESCE(reset,0), COALESCE(comment,''),
 		       enable, COALESCE(mode,''), COALESCE(node_ids_json,''),
-		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''),
+		       COALESCE(provider_ids_json,''), COALESCE(group_nodes_json,''), COALESCE(group_modes_json,''),
 		       created_at, updated_at
 		FROM users WHERE email LIKE ? OR COALESCE(remark,'') LIKE ?
 		ORDER BY email LIMIT 50
@@ -184,7 +187,7 @@ func scanUsers(rows *sql.Rows) ([]User, error) {
 			&u.Flow, &u.Security, &u.Remark, &u.TotalGB, &u.ExpiryTime,
 			&u.LimitIP, &u.SubID, &u.TgID, &u.Reset, &u.Comment,
 			&u.Enable, &u.Mode, &u.NodeIDsJSON, &u.ProviderIDsJSON,
-			&u.GroupNodesJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			&u.GroupNodesJSON, &u.GroupModesJSON, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, u)

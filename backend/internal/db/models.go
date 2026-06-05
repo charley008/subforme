@@ -98,6 +98,7 @@ type User struct {
 	NodeIDsJSON     string `json:"node_ids_json,omitempty"`
 	ProviderIDsJSON string `json:"provider_ids_json,omitempty"`
 	GroupNodesJSON  string `json:"group_nodes_json,omitempty"`
+	GroupModesJSON  string `json:"group_modes_json,omitempty"`
 	CreatedAt       int64  `json:"created_at"`
 	UpdatedAt       int64  `json:"updated_at"`
 }

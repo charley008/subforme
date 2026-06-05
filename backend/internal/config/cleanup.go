@@ -56,6 +56,11 @@ func CleanupAppConfig(app AppConfig, state AppCleanupState) AppConfig {
 				delete(app.UserGroupNodes, user)
 			}
 		}
+		for user := range app.UserGroupModes {
+			if _, ok := userSet[user]; !ok {
+				delete(app.UserGroupModes, user)
+			}
+		}
 	}
 
 	for user, nodes := range app.UserNodes {
@@ -94,6 +99,16 @@ func CleanupAppConfig(app AppConfig, state AppCleanupState) AppConfig {
 		}
 		if len(groups) == 0 {
 			delete(app.UserGroupNodes, user)
+		}
+	}
+	for user, groupModes := range app.UserGroupModes {
+		for groupName := range groupModes {
+			if _, ok := groupSet[groupName]; !ok && state.GroupsKnown {
+				delete(groupModes, groupName)
+			}
+		}
+		if len(groupModes) == 0 {
+			delete(app.UserGroupModes, user)
 		}
 	}
 	return app

@@ -56,10 +56,10 @@
   --gray-800: #f1f5f9;
   --gray-900: #f8fafc;
   --white: #111827;
-  --sidebar-bg: #020617;
+  --sidebar-bg: #161b22;
   --sidebar-text: #94a3b8;
   --sidebar-active: #4f46e5;
-  --sidebar-hover: #111827;
+  --sidebar-hover: #232a34;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
   --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.45), 0 1px 2px -1px rgba(0, 0, 0, 0.45);
   --shadow-md: 0 8px 20px -12px rgba(0, 0, 0, 0.7);

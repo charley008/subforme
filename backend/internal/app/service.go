@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	"subforme/backend/internal/auth"
@@ -100,7 +100,7 @@ func (s Service) GenerateWithBaseURL(user, publicBaseURL string) ([]byte, error)
 		return nil, fmt.Errorf("load %s template: %w", mode, err)
 	}
 
-	groupList := groups.Build(bundle.Groups, nodes, bundle.App.UserGroupNodes[user], bundle.App.UserProviders[user])
+	groupList := groups.Build(bundle.Groups, nodes, bundle.App.UserGroupNodes[user], bundle.App.UserGroupModes[user], bundle.App.UserProviders[user])
 	raw, err := generator.BuildFinalYAML(templateRaw, nodes, groupList, providers, bundle.App.UserProviders[user], mainProxyGroupName(bundle.Groups, groupList))
 	if err != nil {
 		return nil, fmt.Errorf("build final yaml: %w", err)
@@ -606,6 +606,7 @@ func defaultAppConfig() config.AppConfig {
 		UserNodes:                  map[string][]string{},
 		UserProviders:              map[string][]string{},
 		UserGroupNodes:             map[string]map[string][]string{},
+		UserGroupModes:             map[string]map[string]string{},
 	}
 }
 

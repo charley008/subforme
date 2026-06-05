@@ -16,6 +16,7 @@ export type AppConfig = {
   healthcheck_interval_seconds: number;
   xui: XuiConfig;
   user_nodes?: Record<string, string[]>;
+  user_group_modes?: Record<string, Record<string, string>>;
 };
 
 export type XUIConnectionStatus = {
@@ -58,6 +59,7 @@ export type UserSummary = {
   selected_nodes: string[];
   selected_providers: string[];
   group_nodes?: Record<string, string[]>;
+  group_modes?: Record<string, string>;
   uuid?: string;
   password?: string;
   server_traffic?: { server_name: string; up: number; down: number }[];

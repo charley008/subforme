@@ -16,6 +16,7 @@ type userModeRequest struct {
 	Nodes      []string            `json:"nodes,omitempty"`
 	Providers  []string            `json:"providers,omitempty"`
 	GroupNodes map[string][]string `json:"group_nodes,omitempty"`
+	GroupModes map[string]string   `json:"group_modes,omitempty"`
 }
 
 type userSummaryResponse struct {
@@ -31,6 +32,7 @@ type userSummaryResponse struct {
 	SelectedNodes     []string            `json:"selected_nodes,omitempty"`
 	SelectedProviders []string            `json:"selected_providers,omitempty"`
 	GroupNodes        map[string][]string `json:"group_nodes,omitempty"`
+	GroupModes        map[string]string   `json:"group_modes,omitempty"`
 	UUID              string              `json:"uuid,omitempty"`
 	Password          string              `json:"password,omitempty"`
 	ServerTraffic     []db.ServerTraffic  `json:"server_traffic,omitempty"`
@@ -103,6 +105,7 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 						SelectedNodes:     ac.UserNodes[u.Email],
 						SelectedProviders: ac.UserProviders[u.Email],
 						GroupNodes:        ac.UserGroupNodes[u.Email],
+						GroupModes:        ac.UserGroupModes[u.Email],
 						ServerTraffic:     traffic,
 					})
 				}
@@ -141,6 +144,7 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 				SelectedNodes:     appConfig.UserNodes[user.Email],
 				SelectedProviders: appConfig.UserProviders[user.Email],
 				GroupNodes:        appConfig.UserGroupNodes[user.Email],
+				GroupModes:        appConfig.UserGroupModes[user.Email],
 				UUID:              user.UUID,
 				Password:          user.Password,
 			})
@@ -184,6 +188,9 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 		if appConfig.UserProviders == nil {
 			appConfig.UserProviders = map[string][]string{}
 		}
+		if appConfig.UserGroupModes == nil {
+			appConfig.UserGroupModes = map[string]map[string]string{}
+		}
 		appConfig.UserModes[req.User] = req.Mode
 		appConfig.UserNodes[req.User] = req.Nodes
 		appConfig.UserProviders[req.User] = req.Providers
@@ -192,6 +199,9 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 				appConfig.UserGroupNodes = map[string]map[string][]string{}
 			}
 			appConfig.UserGroupNodes[req.User] = req.GroupNodes
+		}
+		if req.GroupModes != nil {
+			appConfig.UserGroupModes[req.User] = req.GroupModes
 		}
 		if err := deps.ConfigService.UpdateAppConfig(appConfig); err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)

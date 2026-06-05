@@ -1,6 +1,6 @@
 package config
 
-const Version = "v1.3.4"
+const Version = "v1.3.5"
 
 type XUIConfig struct {
 	BaseURL  string `yaml:"base_url" json:"base_url"`
@@ -19,6 +19,7 @@ type AppConfig struct {
 	UserNodes                  map[string][]string            `yaml:"user_nodes,omitempty" json:"user_nodes,omitempty"`
 	UserProviders              map[string][]string            `yaml:"user_providers,omitempty" json:"user_providers,omitempty"`
 	UserGroupNodes             map[string]map[string][]string `yaml:"user_group_nodes,omitempty" json:"user_group_nodes,omitempty"`
+	UserGroupModes             map[string]map[string]string   `yaml:"user_group_modes,omitempty" json:"user_group_modes,omitempty"`
 }
 
 type ManagedNode struct {

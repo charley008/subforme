@@ -10,15 +10,22 @@ type GroupDef = {
   provider?: string;
 };
 
-const modeLabel: Record<UserSummary["mode"], string> = {
-  whitelist: "默认直连",
-  blacklist: "默认代理",
-};
-
 type PreviewState = {
   user: string;
   yaml: string;
   nodes: NodePreview[];
+};
+
+const groupTypeOptions = [
+  { value: "select", label: "select" },
+  { value: "url-test", label: "url-test" },
+  { value: "fallback", label: "fallback" },
+  { value: "load-balance", label: "load-balance" },
+];
+
+type PolicyPatch = Partial<UserSummary> & {
+  group_nodes?: Record<string, string[]>;
+  group_modes?: Record<string, string>;
 };
 
 export function UserPreviewPage() {
@@ -30,9 +37,12 @@ export function UserPreviewPage() {
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [busyUser, setBusyUser] = useState<string | null>(null);
 
-  // Group editor modal state
-  const [editingUser, setEditingUser] = useState<UserSummary | null>(null);
+  const [editingNodesUser, setEditingNodesUser] = useState<UserSummary | null>(null);
+  const [editSelectedNodes, setEditSelectedNodes] = useState<string[]>([]);
+
+  const [editingGroupsUser, setEditingGroupsUser] = useState<UserSummary | null>(null);
   const [editGroupNodes, setEditGroupNodes] = useState<Record<string, string[]>>({});
+  const [editGroupModes, setEditGroupModes] = useState<Record<string, string>>({});
 
   useEffect(() => {
     void refresh();
@@ -58,14 +68,14 @@ export function UserPreviewPage() {
       setGroupDefs(groupsCfg.groups || []);
       setMessage(`已加载 ${nextUsers.length} 个用户。`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "加载用户页失败");
+      setMessage(error instanceof Error ? error.message : "加载用户页面失败");
     }
   }
 
-  async function updatePolicy(user: UserSummary, patch: Partial<UserSummary> & { group_nodes?: Record<string, string[]> }) {
+  async function updatePolicy(user: UserSummary, patch: PolicyPatch) {
     const mode = (patch.mode ?? user.mode) as UserSummary["mode"];
-    const selectedNodes = patch.selected_nodes ?? (user.selected_nodes || []);
-    const selectedProviders = patch.selected_providers ?? (user.selected_providers ?? []);
+    const selectedNodes = patch.selected_nodes ?? user.selected_nodes ?? [];
+    const selectedProviders = patch.selected_providers ?? user.selected_providers ?? [];
     setBusyUser(user.email);
     try {
       const body: Record<string, unknown> = {
@@ -76,6 +86,9 @@ export function UserPreviewPage() {
       };
       if (patch.group_nodes) {
         body.group_nodes = patch.group_nodes;
+      }
+      if (patch.group_modes) {
+        body.group_modes = patch.group_modes;
       }
       await putJSON("/api/users/policy", body);
       await refresh();
@@ -95,7 +108,7 @@ export function UserPreviewPage() {
         getJSON<NodePreview[]>(`/api/users/preview?user=${encodeURIComponent(user.email)}`),
       ]);
       setPreview({ user: user.email, yaml, nodes });
-      setMessage(`已生成 ${user.email} 的完整 config.yaml 预览。`);
+      setMessage(`已生成 ${user.email} 的完整配置预览。`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : `预览 ${user.email} 失败`);
     } finally {
@@ -112,16 +125,6 @@ export function UserPreviewPage() {
     }
   }
 
-  function toggleNode(user: UserSummary, nodeID: string) {
-    const selected = new Set(user.selected_nodes || []);
-    if (selected.has(nodeID)) {
-      selected.delete(nodeID);
-    } else {
-      selected.add(nodeID);
-    }
-    void updatePolicy(user, { selected_nodes: Array.from(selected) });
-  }
-
   function toggleProvider(user: UserSummary, providerID: string) {
     const selected = new Set(user.selected_providers ?? []);
     if (selected.has(providerID)) {
@@ -132,28 +135,79 @@ export function UserPreviewPage() {
     void updatePolicy(user, { selected_providers: Array.from(selected) });
   }
 
-  function openGroupEditor(user: UserSummary) {
-    setEditingUser(user);
-    setEditGroupNodes(user.group_nodes || {});
+  function openNodeEditor(user: UserSummary) {
+    setEditingNodesUser(user);
+    setEditSelectedNodes([...(user.selected_nodes || [])]);
   }
 
-  function toggleGroupNode(groupName: string, nodeName: string) {
-    setEditGroupNodes((prev) => {
-      const current = prev[groupName] || [];
-      const set = new Set(current);
-      if (set.has(nodeName)) {
-        set.delete(nodeName);
+  function toggleEditNode(nodeID: string) {
+    setEditSelectedNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeID)) {
+        next.delete(nodeID);
       } else {
-        set.add(nodeName);
+        next.add(nodeID);
       }
-      return { ...prev, [groupName]: Array.from(set) };
+      return Array.from(next);
     });
   }
 
-  function saveGroupNodes() {
-    if (!editingUser) return;
-    void updatePolicy(editingUser, { group_nodes: editGroupNodes });
-    setEditingUser(null);
+  function saveNodeSelection() {
+    if (!editingNodesUser) {
+      return;
+    }
+    void updatePolicy(editingNodesUser, { selected_nodes: editSelectedNodes });
+    setEditingNodesUser(null);
+  }
+
+  function openGroupEditor(user: UserSummary) {
+    setEditingGroupsUser(user);
+    setEditSelectedNodes([...(user.selected_nodes || [])]);
+    setEditGroupNodes({ ...(user.group_nodes || {}) });
+    setEditGroupModes({ ...(user.group_modes || {}) });
+  }
+
+  function toggleGroupNode(groupName: string, refName: string) {
+    setEditGroupNodes((prev) => {
+      const current = prev[groupName] || [];
+      if (current.includes(refName)) {
+        return { ...prev, [groupName]: current.filter((item) => item !== refName) };
+      }
+      return { ...prev, [groupName]: [...current, refName] };
+    });
+  }
+
+  function setGroupMode(groupName: string, mode: string) {
+    setEditGroupModes((prev) => ({ ...prev, [groupName]: mode }));
+  }
+
+  function moveGroupRef(groupName: string, refName: string, direction: "up" | "down") {
+    setEditGroupNodes((prev) => {
+      const current = [...(prev[groupName] || [])];
+      const index = current.indexOf(refName);
+      if (index < 0) {
+        return prev;
+      }
+      const nextIndex = direction === "up" ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= current.length) {
+        return prev;
+      }
+      const swapped = current[nextIndex];
+      current[nextIndex] = current[index];
+      current[index] = swapped;
+      return { ...prev, [groupName]: current };
+    });
+  }
+
+  function saveGroupSettings() {
+    if (!editingGroupsUser) {
+      return;
+    }
+    void updatePolicy(editingGroupsUser, {
+      group_nodes: editGroupNodes,
+      group_modes: editGroupModes,
+    });
+    setEditingGroupsUser(null);
   }
 
   function providerGroupDefs(user: UserSummary): GroupDef[] {
@@ -169,30 +223,70 @@ export function UserPreviewPage() {
       }));
   }
 
+  function visibleGroupsForUser(user: UserSummary): GroupDef[] {
+    const baseGroups = groupDefs.filter((group) => {
+      if (!group.provider) {
+        return true;
+      }
+      return (user.selected_providers ?? []).includes(group.provider);
+    });
+    const merged = [...baseGroups, ...providerGroupDefs(user)];
+    const seen = new Set<string>();
+    return merged.filter((group) => {
+      if (seen.has(group.name)) {
+        return false;
+      }
+      seen.add(group.name);
+      return true;
+    });
+  }
+
+  function selectedNodeNames(nodeIDs: string[]): string[] {
+    return nodeIDs
+      .map((id) => managedNodeMap.get(id)?.name)
+      .filter((name): name is string => Boolean(name));
+  }
+
+  function nodeSummary(user: UserSummary): string {
+    const names = selectedNodeNames(user.selected_nodes || []);
+    if (names.length === 0) {
+      return "未选择节点";
+    }
+    if (names.length <= 5) {
+      return names.join(", ");
+    }
+    return `${names.slice(0, 5).join(", ")} 等 ${names.length} 个`;
+  }
+
   return (
     <div className="page">
       <div className="page-header">
         <h1>用户</h1>
         <div className="page-actions">
-
-          <button type="button" className="btn" onClick={() => void refresh()}>刷新列表</button>
+          <button type="button" className="btn" onClick={() => void refresh()}>
+            刷新列表
+          </button>
         </div>
       </div>
 
       {users.length === 0 ? (
-        <div className="card"><div className="card-body"><div className="empty-state">暂无用户数据，请检查 3x-ui 连接设置。</div></div></div>
+        <div className="card">
+          <div className="card-body">
+            <div className="empty-state">暂无用户数据，请检查 3x-ui 连接设置。</div>
+          </div>
+        </div>
       ) : (
         <div className="table-container">
           <table className="modern-table">
             <thead>
               <tr>
                 <th style={{ width: 140 }}>用户</th>
-                <th style={{ width: 250 }}>UUID / 密码</th>
-                <th style={{ width: 420 }}>节点选择</th>
-                <th style={{ width: 100 }}>分组管理</th>
-                <th style={{ width: 130 }}>第三方订阅</th>
+                <th style={{ width: 220 }}>UUID / 密码</th>
+                <th style={{ width: 220 }}>节点选择</th>
+                <th style={{ width: 120 }}>分组管理</th>
+                <th style={{ width: 150 }}>第三方订阅</th>
                 <th style={{ width: 110 }}>模式</th>
-                <th style={{ width: 60 }}>预览</th>
+                <th style={{ width: 70 }}>预览</th>
                 <th style={{ width: 260 }}>分享</th>
               </tr>
             </thead>
@@ -206,27 +300,30 @@ export function UserPreviewPage() {
                     </div>
                   </td>
                   <td>
-                    <span style={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-all" }}>{user.uuid || user.password || "-"}</span>
+                    <span style={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-all" }}>
+                      {user.uuid || user.password || "-"}
+                    </span>
                   </td>
-                  <td style={{ width: 420 }}>
-                    <div className="chip-group">
-                      {managedNodes.length === 0 ? <span style={{ color: "#94a3b8", fontSize: 12 }}>请先去节点页添加节点</span> : null}
-                      {managedNodes.map((node) => {
-                        const checked = (user.selected_nodes || []).includes(node.id);
-                        return (
-                          <label key={node.id} className={`chip ${checked ? "checked" : ""}`}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                              <input type="checkbox" checked={checked} onChange={() => toggleNode(user, node.id)} disabled={busyUser === user.email} style={{ margin: 0 }} />
-                              <span>{node.name}</span>
-                            </div>
-
-                          </label>
-                        );
-                      })}
+                  <td>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => openNodeEditor(user)}
+                        disabled={busyUser === user.email}
+                      >
+                        节点设置
+                      </button>
+                      <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.5 }}>{nodeSummary(user)}</span>
                     </div>
                   </td>
                   <td>
-                    <button className="btn btn-sm" onClick={() => openGroupEditor(user)} disabled={busyUser === user.email}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => openGroupEditor(user)}
+                      disabled={busyUser === user.email}
+                    >
                       分组设置
                     </button>
                   </td>
@@ -237,8 +334,14 @@ export function UserPreviewPage() {
                           const checked = (user.selected_providers ?? []).includes(provider.id);
                           return (
                             <label key={provider.id} className={`chip ${checked ? "checked" : ""}`}>
-                              <input type="checkbox" checked={checked} onChange={() => toggleProvider(user, provider.id)} disabled={busyUser === user.email} style={{ margin: 0 }} />
-                              <span>{provider.name}</span>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleProvider(user, provider.id)}
+                                disabled={busyUser === user.email}
+                                style={{ margin: 0 }}
+                              />
+                              <span>{provider.name || provider.id}</span>
                             </label>
                           );
                         })}
@@ -249,19 +352,47 @@ export function UserPreviewPage() {
                   </td>
                   <td>
                     <div className="btn-group">
-                      <button type="button" className={`btn btn-sm ${user.mode === "whitelist" ? "btn-primary" : ""}`} onClick={() => void updatePolicy(user, { mode: "whitelist" })} disabled={busyUser === user.email}>默认直连</button>
-                      <button type="button" className={`btn btn-sm ${user.mode === "blacklist" ? "btn-primary" : ""}`} onClick={() => void updatePolicy(user, { mode: "blacklist" })} disabled={busyUser === user.email}>默认代理</button>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${user.mode === "whitelist" ? "btn-primary" : ""}`}
+                        onClick={() => void updatePolicy(user, { mode: "whitelist" })}
+                        disabled={busyUser === user.email}
+                      >
+                        默认直连
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${user.mode === "blacklist" ? "btn-primary" : ""}`}
+                        onClick={() => void updatePolicy(user, { mode: "blacklist" })}
+                        disabled={busyUser === user.email}
+                      >
+                        默认代理
+                      </button>
                     </div>
                   </td>
                   <td>
-                    <button type="button" className="btn btn-sm" onClick={() => void handlePreview(user)} disabled={busyUser === user.email}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => void handlePreview(user)}
+                      disabled={busyUser === user.email}
+                    >
                       {busyUser === user.email ? "..." : "预览"}
                     </button>
                   </td>
                   <td style={{ width: 260 }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <button type="button" className="btn btn-sm" onClick={() => void handleCopy(user.share_url)} style={{ alignSelf: "flex-start" }}>复制链接</button>
-                      <span style={{ fontSize: 11, color: "#94a3b8", wordBreak: "break-all", maxWidth: 260 }}>{user.share_url}</span>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => void handleCopy(user.share_url)}
+                        style={{ alignSelf: "flex-start" }}
+                      >
+                        复制链接
+                      </button>
+                      <span style={{ fontSize: 11, color: "#94a3b8", wordBreak: "break-all", maxWidth: 260 }}>
+                        {user.share_url}
+                      </span>
                     </div>
                   </td>
                 </tr>
@@ -271,97 +402,258 @@ export function UserPreviewPage() {
         </div>
       )}
 
-      <div className="message" style={{ marginTop: 16 }}>{message}</div>
+      <div className="message" style={{ marginTop: 16 }}>
+        {message}
+      </div>
 
-      {/* Group editor modal */}
-      {editingUser ? (
-        <div className="modal-mask" onClick={() => setEditingUser(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
+      {editingNodesUser ? (
+        <div className="modal-mask" onClick={() => setEditingNodesUser(null)}>
+          <div className="modal-content" onClick={(event) => event.stopPropagation()} style={{ maxWidth: 720 }}>
             <div className="modal-header">
-              <h2>{editingUser.email} 的分组节点</h2>
+              <h2>{editingNodesUser.email} 的节点设置</h2>
               <div className="btn-group">
-                <button className="btn btn-sm btn-primary" onClick={saveGroupNodes}>保存</button>
-                <button className="btn btn-sm" onClick={() => setEditingUser(null)}>取消</button>
+                <button type="button" className="btn btn-sm btn-primary" onClick={saveNodeSelection}>
+                  保存
+                </button>
+                <button type="button" className="btn btn-sm" onClick={() => setEditingNodesUser(null)}>
+                  取消
+                </button>
               </div>
             </div>
-            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
-              已选节点：{(editingUser.selected_nodes || []).length > 0
-                ? managedNodes.filter((n) => (editingUser.selected_nodes || []).includes(n.id)).map((n) => n.name).join("、")
-                : "请在用户列表中勾选节点"}
+            <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 16 }}>
+              已选 {editSelectedNodes.length} 个节点
+            </div>
+            {managedNodes.length === 0 ? (
+              <div className="empty-state">请先去节点页面添加节点。</div>
+            ) : (
+              <div className="chip-group">
+                {managedNodes.map((node) => {
+                  const checked = editSelectedNodes.includes(node.id);
+                  return (
+                    <label key={node.id} className={`chip ${checked ? "checked" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleEditNode(node.id)}
+                        style={{ margin: 0 }}
+                      />
+                      <span>{node.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {editingGroupsUser ? (
+        <div className="modal-mask" onClick={() => setEditingGroupsUser(null)}>
+          <div className="modal-content" onClick={(event) => event.stopPropagation()} style={{ maxWidth: 760 }}>
+            <div className="modal-header">
+              <h2>{editingGroupsUser.email} 的分组设置</h2>
+              <div className="btn-group">
+                <button type="button" className="btn btn-sm btn-primary" onClick={saveGroupSettings}>
+                  保存
+                </button>
+                <button type="button" className="btn btn-sm" onClick={() => setEditingGroupsUser(null)}>
+                  取消
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 16 }}>
+              已选节点：{selectedNodeNames(editSelectedNodes).join(", ") || "未选择节点"}
             </div>
 
-            {/* Available groups for this user */}
-            {(() => {
-              const baseGroups = groupDefs.filter((g) => {
-                if (!g.provider) return true;
-                return (editingUser.selected_providers ?? []).includes(g.provider);
-              });
-              const providerGroups = providerGroupDefs(editingUser);
-              const seen = new Set<string>();
-              const visibleGroups = [...baseGroups, ...providerGroups].filter((g) => {
-                if (seen.has(g.name)) return false;
-                seen.add(g.name);
-                return true;
-              });
-              if (visibleGroups.length === 0) {
-                return <div className="empty-state">暂无可用分组，请先去代理分组页添加。</div>;
-              }
-              const visibleGroupNames = visibleGroups.map((g) => g.name);
-              return (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {visibleGroups.map((g) => (
-                    <div key={g.name} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <strong style={{ fontSize: 14 }}>{g.name}</strong>
-                        <span className="badge badge-success" style={{ fontSize: 11 }}>{g.type}</span>
-                        {g.provider ? <span className="badge badge-warning" style={{ fontSize: 11 }}>use: {g.provider}</span> : null}
+            {visibleGroupsForUser(editingGroupsUser).length === 0 ? (
+              <div className="empty-state">暂无可用分组，请先去代理分组页面添加。</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {visibleGroupsForUser(editingGroupsUser).map((group) => {
+                  const selectedNodeRefs = selectedNodeNames(editSelectedNodes);
+                  const currentRefs = editGroupNodes[group.name] || [];
+                  const currentMode = editGroupModes[group.name] || group.type || "select";
+                  const siblingGroups = visibleGroupsForUser(editingGroupsUser)
+                    .map((item) => item.name)
+                    .filter((name) => name !== group.name);
+                  const orderedRefs = currentRefs.filter((ref) => selectedNodeRefs.includes(ref) || siblingGroups.includes(ref));
+
+                  return (
+                    <div
+                      key={group.name}
+                      style={{
+                        border: "1px solid var(--gray-200)",
+                        borderRadius: 8,
+                        padding: 12,
+                        background: "var(--gray-50)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
+                          marginBottom: 10,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <strong style={{ fontSize: 14 }}>{group.name}</strong>
+                          {group.provider ? (
+                            <span className="badge badge-warning" style={{ fontSize: 11 }}>
+                              use: {group.provider}
+                            </span>
+                          ) : null}
+                        </div>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--gray-500)" }}>
+                          <span>模式</span>
+                          <select
+                            value={currentMode}
+                            onChange={(event) => setGroupMode(group.name, event.target.value)}
+                            style={{
+                              minWidth: 140,
+                              height: 32,
+                              borderRadius: 8,
+                              border: "1px solid var(--gray-300)",
+                              background: "var(--white)",
+                              color: "var(--gray-900)",
+                              padding: "0 10px",
+                            }}
+                          >
+                            {groupTypeOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                       </div>
-                      {g.provider ? (
-                        <span style={{ fontSize: 12, color: "#94a3b8" }}>该组使用第三方 provider，无需选择节点</span>
+
+                      {group.provider ? (
+                        <div style={{ fontSize: 12, color: "var(--gray-500)" }}>该分组引用第三方订阅源，不需要手动选择节点。</div>
                       ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           <div>
-                            <span style={{ fontSize: 11, color: "#94a3b8" }}>节点：</span>
-                            <div className="chip-group" style={{ marginTop: 2 }}>
-                              {(() => {
-                                const selectedNodes = managedNodes.filter((n) => (editingUser.selected_nodes || []).includes(n.id));
-                                return selectedNodes.length === 0 ? (
-                                  <span style={{ fontSize: 12, color: "#94a3b8" }}>请在用户列表中勾选节点</span>
-                                ) : (
-                                  selectedNodes.map((n) => {
-                                    const checked = (editGroupNodes[g.name] || []).includes(n.name);
-                                    return (
-                                      <label key={n.id} className={`chip ${checked ? "checked" : ""}`} style={{ fontSize: 12, padding: "3px 8px" }}>
-                                        <input type="checkbox" checked={checked} onChange={() => toggleGroupNode(g.name, n.name)} style={{ margin: 0 }} />
-                                        <span>{n.name}</span>
-                                      </label>
-                                    );
-                                  })
-                                );
-                              })()}
-                            </div>
+                            <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 6 }}>节点引用</div>
+                            {selectedNodeRefs.length === 0 ? (
+                              <div style={{ fontSize: 12, color: "var(--gray-500)" }}>请先在“节点设置”里选择节点。</div>
+                            ) : (
+                              <div className="chip-group">
+                                {selectedNodeRefs.map((nodeName) => {
+                                  const checked = currentRefs.includes(nodeName);
+                                  return (
+                                    <label key={nodeName} className={`chip ${checked ? "checked" : ""}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() => toggleGroupNode(group.name, nodeName)}
+                                        style={{ margin: 0 }}
+                                      />
+                                      <span>{nodeName}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
+
                           <div>
-                            <span style={{ fontSize: 11, color: "#94a3b8" }}>其他分组：</span>
-                            <div className="chip-group" style={{ marginTop: 2 }}>
-                              {visibleGroupNames.filter((n) => n !== g.name).map((gn) => {
-                                const checked = (editGroupNodes[g.name] || []).includes(gn);
-                                return (
-                                  <label key={gn} className={`chip ${checked ? "checked" : ""}`} style={{ fontSize: 12, padding: "3px 8px" }}>
-                                    <input type="checkbox" checked={checked} onChange={() => toggleGroupNode(g.name, gn)} style={{ margin: 0 }} />
-                                    <span>{gn}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
+                            <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 6 }}>其他分组引用</div>
+                            {siblingGroups.length === 0 ? (
+                              <div style={{ fontSize: 12, color: "var(--gray-500)" }}>暂无其他分组可引用。</div>
+                            ) : (
+                              <div className="chip-group">
+                                {siblingGroups.map((groupName) => {
+                                  const checked = currentRefs.includes(groupName);
+                                  return (
+                                    <label key={groupName} className={`chip ${checked ? "checked" : ""}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={() => toggleGroupNode(group.name, groupName)}
+                                        style={{ margin: 0 }}
+                                      />
+                                      <span>{groupName}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
+
+                          {currentMode === "fallback" ? (
+                            <div>
+                              <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 6 }}>fallback 顺序</div>
+                              {orderedRefs.length === 0 ? (
+                                <div style={{ fontSize: 12, color: "var(--gray-500)" }}>请先勾选要参与 fallback 的节点或分组。</div>
+                              ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                  {orderedRefs.map((refName, index) => (
+                                    <div
+                                      key={refName}
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        gap: 12,
+                                        padding: "8px 10px",
+                                        border: "1px solid var(--gray-200)",
+                                        borderRadius: 8,
+                                        background: "var(--white)",
+                                      }}
+                                    >
+                                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                                        <span
+                                          style={{
+                                            width: 22,
+                                            height: 22,
+                                            borderRadius: 999,
+                                            background: "var(--primary-bg)",
+                                            color: "var(--primary-dark)",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            flexShrink: 0,
+                                          }}
+                                        >
+                                          {index + 1}
+                                        </span>
+                                        <span style={{ fontSize: 13, color: "var(--gray-800)", wordBreak: "break-all" }}>{refName}</span>
+                                      </div>
+                                      <div className="btn-group" style={{ flexWrap: "nowrap" }}>
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm"
+                                          onClick={() => moveGroupRef(group.name, refName, "up")}
+                                          disabled={index === 0}
+                                        >
+                                          上移
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm"
+                                          onClick={() => moveGroupRef(group.name, refName, "down")}
+                                          disabled={index === orderedRefs.length - 1}
+                                        >
+                                          下移
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              );
-            })()}
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       ) : null}
@@ -372,8 +664,19 @@ export function UserPreviewPage() {
             <div className="modal-header">
               <h2>{preview.user} 的完整预览</h2>
               <div className="btn-group">
-                <button type="button" className="btn btn-sm" onClick={() => { void navigator.clipboard.writeText(preview.yaml); setMessage("配置已复制到剪贴板。"); }}>复制</button>
-                <button type="button" className="btn btn-sm" onClick={() => setPreview(null)}>关闭</button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(preview.yaml);
+                    setMessage("配置已复制到剪贴板。");
+                  }}
+                >
+                  复制
+                </button>
+                <button type="button" className="btn btn-sm" onClick={() => setPreview(null)}>
+                  关闭
+                </button>
               </div>
             </div>
             <pre className="yaml-preview">{preview.yaml}</pre>

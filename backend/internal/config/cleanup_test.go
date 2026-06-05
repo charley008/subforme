@@ -33,6 +33,15 @@ func TestCleanupAppConfigPrunesDeletedUsersAndRefs(t *testing.T) {
 				"PROXY": {"Los Angeles"},
 			},
 		},
+		UserGroupModes: map[string]map[string]string{
+			"alice": {
+				"PROXY": "fallback",
+				"Old":   "select",
+			},
+			"deleted": {
+				"PROXY": "url-test",
+			},
+		},
 	}
 
 	cleaned := CleanupAppConfig(app, AppCleanupState{
@@ -63,6 +72,12 @@ func TestCleanupAppConfigPrunesDeletedUsersAndRefs(t *testing.T) {
 	}
 	if _, ok := cleaned.UserGroupNodes["alice"]["Old"]; ok {
 		t.Fatal("deleted group was not removed")
+	}
+	if got := cleaned.UserGroupModes["alice"]["PROXY"]; got != "fallback" {
+		t.Fatalf("unexpected group mode override: %#v", cleaned.UserGroupModes)
+	}
+	if _, ok := cleaned.UserGroupModes["alice"]["Old"]; ok {
+		t.Fatal("deleted group mode was not removed")
 	}
 }
 

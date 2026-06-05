@@ -42,6 +42,7 @@ func TestUpdateUserPreservesSubscriptionPrefs(t *testing.T) {
 		NodeIDsJSON:     `["los"]`,
 		ProviderIDsJSON: `["airport"]`,
 		GroupNodesJSON:  `{"PROXY":["los","airport"]}`,
+		GroupModesJSON:  `{"PROXY":"fallback"}`,
 	}
 	if err := store.CreateUser(u); err != nil {
 		t.Fatalf("CreateUser returned error: %v", err)
@@ -52,6 +53,7 @@ func TestUpdateUserPreservesSubscriptionPrefs(t *testing.T) {
 	u.NodeIDsJSON = ""
 	u.ProviderIDsJSON = ""
 	u.GroupNodesJSON = ""
+	u.GroupModesJSON = ""
 	if err := store.UpdateUser(u); err != nil {
 		t.Fatalf("UpdateUser returned error: %v", err)
 	}
@@ -60,7 +62,7 @@ func TestUpdateUserPreservesSubscriptionPrefs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUser returned error: %v", err)
 	}
-	if got.UUID != "uuid-2" || got.Mode != "blacklist" || got.NodeIDsJSON == "" || got.ProviderIDsJSON == "" || got.GroupNodesJSON == "" {
+	if got.UUID != "uuid-2" || got.Mode != "blacklist" || got.NodeIDsJSON == "" || got.ProviderIDsJSON == "" || got.GroupNodesJSON == "" || got.GroupModesJSON == "" {
 		t.Fatalf("unexpected user after update: %#v", got)
 	}
 }
@@ -85,6 +87,10 @@ func TestAppConfigPrefsOnlyApplyToExistingUsers(t *testing.T) {
 			"alice": {"airport"},
 			"ghost": {"stale"},
 		},
+		UserGroupModes: map[string]map[string]string{
+			"alice": {"PROXY": "fallback"},
+			"ghost": {"PROXY": "url-test"},
+		},
 	})
 	if err != nil {
 		t.Fatalf("SaveAppConfigToDB returned error: %v", err)
@@ -102,6 +108,9 @@ func TestAppConfigPrefsOnlyApplyToExistingUsers(t *testing.T) {
 	}
 	if got.UserNodes["alice"][0] != "node-a" || got.UserProviders["alice"][0] != "airport" {
 		t.Fatalf("expected alice prefs, got %#v %#v", got.UserNodes, got.UserProviders)
+	}
+	if got.UserGroupModes["alice"]["PROXY"] != "fallback" {
+		t.Fatalf("expected alice group mode override, got %#v", got.UserGroupModes)
 	}
 }
 
