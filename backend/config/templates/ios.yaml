@@ -1,0 +1,53 @@
+proxies: []
+proxy-groups: []
+rule-providers:
+  proxy:
+    type: http
+    behavior: domain
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt
+    path: ./ruleset/proxy.yaml
+    interval: 86400
+    proxy: DIRECT
+  cncidr:
+    type: http
+    behavior: ipcidr
+    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt
+    path: ./ruleset/cncidr.yaml
+    interval: 86400
+    proxy: DIRECT
+  telegramcidr:
+    type: http
+    behavior: ipcidr
+    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/telegramcidr.txt
+    path: ./ruleset/telegramcidr.yaml
+    interval: 86400
+    proxy: DIRECT
+  lancidr:
+    type: http
+    behavior: ipcidr
+    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt
+    path: ./ruleset/lancidr.yaml
+    interval: 86400
+    proxy: DIRECT
+rules:
+  - DOMAIN,api.cloudflare.com,DIRECT
+  - DOMAIN,www.gstatic.com,DIRECT
+  - DOMAIN,doh.dns.sb,AUTO
+  - DOMAIN,dns.google,AUTO
+  - DOMAIN,dns.cloudflare.com,AUTO
+  - GEOSITE,openai,PROXY
+  - GEOSITE,anthropic,PROXY
+  - GEOSITE,google-gemini,PROXY
+  - GEOSITE,tiktok,AUTO
+  - GEOSITE,github,AUTO
+  - GEOSITE,twitter,AUTO
+  - GEOSITE,youtube,AUTO
+  - GEOSITE,google,AUTO
+  - RULE-SET,lancidr,DIRECT
+  - RULE-SET,cncidr,DIRECT
+  - RULE-SET,proxy,AUTO
+  - RULE-SET,cncidr,DIRECT
+  - RULE-SET,telegramcidr,AUTO
+  - GEOIP,private,DIRECT
+  - GEOIP,telegram,AUTO
+  - MATCH,DIRECT # default direct

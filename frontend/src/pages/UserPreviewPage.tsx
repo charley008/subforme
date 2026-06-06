@@ -36,6 +36,7 @@ export function UserPreviewPage() {
   const [message, setMessage] = useState("");
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [busyUser, setBusyUser] = useState<string | null>(null);
+  const [shareTypes, setShareTypes] = useState<Record<string, string>>({});
 
   const [editingNodesUser, setEditingNodesUser] = useState<UserSummary | null>(null);
   const [editSelectedNodes, setEditSelectedNodes] = useState<string[]>([]);
@@ -123,6 +124,15 @@ export function UserPreviewPage() {
     } catch {
       setMessage("复制失败，请手动复制分享地址。");
     }
+  }
+
+  function shareURLForUser(user: UserSummary): string {
+    const shareType = shareTypes[user.email] || "default";
+    if (shareType !== "ios") {
+      return user.share_url;
+    }
+    const separator = user.share_url.includes("?") ? "&" : "?";
+    return `${user.share_url}${separator}type=ios`;
   }
 
   function toggleProvider(user: UserSummary, providerID: string) {
@@ -381,17 +391,34 @@ export function UserPreviewPage() {
                     </button>
                   </td>
                   <td style={{ width: 260 }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        onClick={() => void handleCopy(user.share_url)}
-                        style={{ alignSelf: "flex-start" }}
-                      >
-                        复制链接
-                      </button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <select
+                          value={shareTypes[user.email] || "default"}
+                          onChange={(event) => setShareTypes((current) => ({ ...current, [user.email]: event.target.value }))}
+                          style={{
+                            width: 120,
+                            padding: "4px 8px",
+                            border: "1px solid var(--gray-300)",
+                            borderRadius: 8,
+                            background: "var(--white)",
+                            color: "var(--gray-900)",
+                            fontSize: 12,
+                          }}
+                        >
+                          <option value="default">默认订阅</option>
+                          <option value="ios">iOS 订阅</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={() => void handleCopy(shareURLForUser(user))}
+                        >
+                          复制链接
+                        </button>
+                      </div>
                       <span style={{ fontSize: 11, color: "#94a3b8", wordBreak: "break-all", maxWidth: 260 }}>
-                        {user.share_url}
+                        {shareURLForUser(user)}
                       </span>
                     </div>
                   </td>

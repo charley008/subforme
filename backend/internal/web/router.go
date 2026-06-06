@@ -19,6 +19,10 @@ type PublicBaseSubscriptionService interface {
 	GenerateWithBaseURL(user, publicBaseURL string) ([]byte, error)
 }
 
+type VariantSubscriptionService interface {
+	GenerateWithBaseURLAndVariant(user, publicBaseURL, variant string) ([]byte, error)
+}
+
 type AuthService interface {
 	Check(username, password string) bool
 	UpdatePassword(newPassword string)

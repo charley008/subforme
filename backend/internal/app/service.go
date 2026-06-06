@@ -61,6 +61,10 @@ func (s Service) Generate(user string) ([]byte, error) {
 }
 
 func (s Service) GenerateWithBaseURL(user, publicBaseURL string) ([]byte, error) {
+	return s.GenerateWithBaseURLAndVariant(user, publicBaseURL, "")
+}
+
+func (s Service) GenerateWithBaseURLAndVariant(user, publicBaseURL, variant string) ([]byte, error) {
 	bundle, err := s.loadBundle()
 	if err != nil {
 		return nil, err
@@ -91,13 +95,17 @@ func (s Service) GenerateWithBaseURL(user, publicBaseURL string) ([]byte, error)
 		return nil, fmt.Errorf("load providers: %w", err)
 	}
 	providers = withProviderPublicBaseURL(providers, publicBaseURL)
+	templateMode, err := templateModeForVariant(mode, variant)
+	if err != nil {
+		return nil, err
+	}
 	templateLoader := s.TemplateLoader
 	if templateLoader == nil {
 		templateLoader = config.LoadModeTemplateYAML
 	}
-	templateRaw, err := templateLoader(s.ConfigDir, mode)
+	templateRaw, err := templateLoader(s.ConfigDir, templateMode)
 	if err != nil {
-		return nil, fmt.Errorf("load %s template: %w", mode, err)
+		return nil, fmt.Errorf("load %s template: %w", templateMode, err)
 	}
 
 	groupList := groups.Build(bundle.Groups, nodes, bundle.App.UserGroupNodes[user], bundle.App.UserGroupModes[user], bundle.App.UserProviders[user])
@@ -116,6 +124,17 @@ func (s Service) GenerateWithBaseURL(user, publicBaseURL string) ([]byte, error)
 	}
 
 	return raw, nil
+}
+
+func templateModeForVariant(mode, variant string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(variant)) {
+	case "":
+		return mode, nil
+	case "ios":
+		return "ios", nil
+	default:
+		return "", fmt.Errorf("unsupported subscription type %q", variant)
+	}
 }
 
 func withProviderPublicBaseURL(providers []config.ProviderAddon, publicBaseURL string) []config.ProviderAddon {

@@ -241,6 +241,35 @@ func TestGenerateWithBaseURLRewritesProviderURL(t *testing.T) {
 	}
 }
 
+func TestGenerateWithVariantUsesIOSTemplate(t *testing.T) {
+	var loadedMode string
+	svc := Service{
+		ConfigDir: "ignored",
+		Loader: func(dir string) (config.Bundle, error) {
+			return config.Bundle{
+				App: config.AppConfig{Mode: "whitelist"},
+				Groups: config.GroupConfig{Groups: []config.GroupDef{
+					{Name: "PROXY", Type: "select"},
+				}},
+			}, nil
+		},
+		ResolverFactory: func(cfg config.XUIConfig) XUIResolver {
+			return fakeResolver{nodes: []xui.Node{{Name: "node-a", Type: "vless", Server: "example.com", Port: 443, UUID: "uuid"}}}
+		},
+		TemplateLoader: func(dir, mode string) (string, error) {
+			loadedMode = mode
+			return "proxies: []\nproxy-groups: []\nrules:\n  - MATCH,DIRECT\n", nil
+		},
+	}
+
+	if _, err := svc.GenerateWithBaseURLAndVariant("alice", "", "ios"); err != nil {
+		t.Fatalf("GenerateWithBaseURLAndVariant returned error: %v", err)
+	}
+	if loadedMode != "ios" {
+		t.Fatalf("expected ios template, got %q", loadedMode)
+	}
+}
+
 func TestBuildNodeFromCacheIncludesXHTTPSettings(t *testing.T) {
 	node := buildNodeFromCache(
 		db.Inbound{

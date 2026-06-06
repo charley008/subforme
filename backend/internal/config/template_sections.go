@@ -46,7 +46,7 @@ func ensureTemplateLayout(dir string) error {
 		return err
 	}
 
-	for _, name := range []string{"base.yaml", "whitelist.yaml", "blacklist.yaml"} {
+	for _, name := range []string{"base.yaml", "whitelist.yaml", "blacklist.yaml", "ios.yaml"} {
 		path := filepath.Join(templatesDir, name)
 		if fileExists(path) {
 			continue
@@ -62,6 +62,14 @@ func ensureTemplateLayout(dir string) error {
 			}
 		case "blacklist.yaml":
 			if err := os.WriteFile(path, []byte("proxies: []\nproxy-groups: []\nrule-providers: {}\nrules: []\n"), 0o644); err != nil {
+				return err
+			}
+		case "ios.yaml":
+			raw, err := readYAMLText(filepath.Join(templatesDir, "whitelist.yaml"))
+			if err != nil {
+				raw = "proxies: []\nproxy-groups: []\nrule-providers: {}\nrules: []\n"
+			}
+			if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
 				return err
 			}
 		}
@@ -180,7 +188,7 @@ func mergeTemplateSections(baseRaw, modeRaw string) (string, error) {
 
 func templateSectionPath(dir, section string) (string, error) {
 	switch section {
-	case "base", "whitelist", "blacklist":
+	case "base", "whitelist", "blacklist", "ios":
 		return filepath.Join(dir, "templates", section+".yaml"), nil
 	default:
 		return "", fmt.Errorf("unsupported template section %q", section)

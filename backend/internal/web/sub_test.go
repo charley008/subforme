@@ -19,6 +19,24 @@ func (s stubSubscriptionService) Generate(user string) ([]byte, error) {
 	return s.payload, s.err
 }
 
+type stubVariantSubscriptionService struct {
+	user    string
+	variant string
+	payload []byte
+	err     error
+}
+
+func (s *stubVariantSubscriptionService) Generate(user string) ([]byte, error) {
+	s.user = user
+	return s.payload, s.err
+}
+
+func (s *stubVariantSubscriptionService) GenerateWithBaseURLAndVariant(user, publicBaseURL, variant string) ([]byte, error) {
+	s.user = user
+	s.variant = variant
+	return s.payload, s.err
+}
+
 func TestSubRequiresUserQuery(t *testing.T) {
 	router := NewRouter(Dependencies{})
 	req := httptest.NewRequest(http.MethodGet, "/api/sub", nil)
@@ -49,6 +67,38 @@ func TestPreviewReturnsGeneratedYAML(t *testing.T) {
 	}
 	if rec.Body.String() != "proxies:\n  - name: HK-01\n" {
 		t.Fatalf("unexpected body: %q", rec.Body.String())
+	}
+}
+
+func TestSubPassesIOSVariantFromTypeQuery(t *testing.T) {
+	svc := &stubVariantSubscriptionService{payload: []byte("ios: true\n")}
+	router := NewRouter(Dependencies{SubscriptionService: svc})
+	req := httptest.NewRequest(http.MethodGet, "/api/sub?user=charley&type=ios", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if svc.user != "charley" || svc.variant != "ios" {
+		t.Fatalf("unexpected generated request: user=%q variant=%q", svc.user, svc.variant)
+	}
+}
+
+func TestSubIgnoresModelQuery(t *testing.T) {
+	svc := &stubVariantSubscriptionService{payload: []byte("ios: true\n")}
+	router := NewRouter(Dependencies{SubscriptionService: svc})
+	req := httptest.NewRequest(http.MethodGet, "/api/sub?user=charley&model=ios", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if svc.variant != "" {
+		t.Fatalf("expected empty variant, got %q", svc.variant)
 	}
 }
 

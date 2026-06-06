@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { YamlEditor } from "../components/YamlEditor";
 import { getText, putText } from "../lib/api";
 
-type TemplateSection = "base" | "blacklist" | "whitelist";
+type TemplateSection = "base" | "blacklist" | "whitelist" | "ios";
 
 const sections: { key: TemplateSection; label: string; endpoint: string }[] = [
   { key: "base", label: "基础", endpoint: "/api/config/template?section=base" },
   { key: "whitelist", label: "默认直连", endpoint: "/api/config/template?section=whitelist" },
   { key: "blacklist", label: "默认代理", endpoint: "/api/config/template?section=blacklist" },
+  { key: "ios", label: "iOS / 移动端", endpoint: "/api/config/template?section=ios" },
 ];
 
 export function TemplatesPage() {
@@ -91,7 +92,8 @@ export function TemplatesPage() {
       </div>
 
       <div className="message" style={{ marginTop: 16 }}>
-        说明：基础是完整 config.yaml 去掉动态部分后的公共配置。<code>proxies: []</code>、<code>proxy-groups: []</code> 是占位符，由系统自动填充。第三方 <code>proxy-providers</code> 请到“第三方 Providers”页面管理。
+        说明：基础模板是公共配置；默认直连、默认代理和 iOS / 移动端模板会与基础模板合并。<code>proxies: []</code> 和{" "}
+        <code>proxy-groups: []</code> 是占位符，由系统自动填充。
       </div>
 
       <div className="message" style={{ marginTop: 8 }}>{message}</div>

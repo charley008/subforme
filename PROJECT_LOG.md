@@ -87,3 +87,62 @@ Dashboard traffic refresh now waits roughly for the slowest healthy panel instea
 
 ### Next
 Verify refresh latency against a mix of healthy and offline panels, then tune the 5-second timeout if needed.
+
+## [2026-06-06 12:10]
+
+### Goal
+Add an iOS/mobile subscription template variant for memory-constrained clients.
+
+### Findings
+- The existing subscription generator selected only the user's normal mode template (`whitelist` or `blacklist`).
+- The template editor supported only `base`, `whitelist`, and `blacklist`.
+- The public subscription URL can support a template variant without changing existing links.
+
+### Actions
+- Added an `ios.yaml` template, initially copied from the default direct template.
+- Added `ios` as a supported template editor section.
+- Added support for `/api/sub?user=<name>&type=ios`.
+- Added an iOS subscription option in the user page share controls.
+- Rebuilt `release/subforme.exe` and refreshed `release/web` for local testing.
+
+### Modified Files
+- backend/config/templates/ios.yaml: new iOS/mobile template seed.
+- backend/internal/config/template_sections.go: manage the `ios` template section.
+- backend/internal/app/service.go: select the iOS template for subscription variants.
+- backend/internal/web/public.go: read the `type` subscription variant parameter.
+- frontend/src/pages/TemplatesPage.tsx: expose the iOS/mobile template tab.
+- frontend/src/pages/UserPreviewPage.tsx: add the iOS subscription copy option.
+
+### Result
+Existing subscription links are unchanged, while iOS/mobile clients can use `type=ios` to receive the dedicated template.
+
+### Next
+Tune `ios.yaml` rules later to reduce memory usage for iOS clients with strict memory limits.
+
+## [2026-06-06 20:52]
+
+### Goal
+Publish v1.3.6 with the iOS subscription template and user share-link selector.
+
+### Findings
+- Version metadata still pointed at v1.3.5.
+- The repository did not yet include a license file.
+- Release notes should stay focused on user-facing subscription changes.
+
+### Actions
+- Bumped the app version to v1.3.6.
+- Added a concise v1.3.6 release note.
+- Added an MIT license file.
+- Rebuilt the frontend and local release executable.
+
+### Modified Files
+- backend/internal/config/types.go: update displayed API version.
+- RELEASE_NOTES.md: add concise v1.3.6 release notes.
+- LICENSE: add MIT license.
+- release/subforme.exe and release/web: refreshed local test artifacts.
+
+### Result
+v1.3.6 is ready to commit, tag, push, and publish on GitHub.
+
+### Next
+Create the git commit, tag v1.3.6, push to GitHub, and create the GitHub release.

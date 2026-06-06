@@ -26,3 +26,18 @@ func TestSaveTemplateSectionYAMLNormalizesLineEndings(t *testing.T) {
 		t.Fatalf("expected comments to be preserved, got %q", string(saved))
 	}
 }
+
+func TestLoadTemplateSectionYAMLSupportsIOS(t *testing.T) {
+	dir := t.TempDir()
+	if err := SaveTemplateSectionYAML(dir, "whitelist", "proxies: []\nproxy-groups: []\nrules:\n  - MATCH,DIRECT\n"); err != nil {
+		t.Fatalf("SaveTemplateSectionYAML returned error: %v", err)
+	}
+
+	raw, err := LoadTemplateSectionYAML(dir, "ios")
+	if err != nil {
+		t.Fatalf("LoadTemplateSectionYAML returned error: %v", err)
+	}
+	if raw == "" {
+		t.Fatal("expected ios template content")
+	}
+}

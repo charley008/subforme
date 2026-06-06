@@ -57,10 +57,18 @@ func registerPublicRoutes(mux *http.ServeMux, deps Dependencies) {
 }
 
 func generateForRequest(service SubscriptionService, r *http.Request, user string) ([]byte, error) {
+	variant := subscriptionVariantFromRequest(r)
+	if svc, ok := service.(VariantSubscriptionService); ok {
+		return svc.GenerateWithBaseURLAndVariant(user, publicBaseURLForRequest(r), variant)
+	}
 	if svc, ok := service.(PublicBaseSubscriptionService); ok {
 		return svc.GenerateWithBaseURL(user, publicBaseURLForRequest(r))
 	}
 	return service.Generate(user)
+}
+
+func subscriptionVariantFromRequest(r *http.Request) string {
+	return strings.TrimSpace(r.URL.Query().Get("type"))
 }
 
 func registerFrontendRoutes(mux *http.ServeMux, frontendDir string) {
