@@ -23,6 +23,7 @@ export function XuiSettingsPage() {
   const [adminUser, setAdminUser] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -69,6 +70,55 @@ export function XuiSettingsPage() {
       setMessage(error instanceof Error ? error.message : "3x-ui 连通失败");
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function handleBackupExport() {
+    try {
+      const response = await fetch("/api/backup/export", { credentials: "include" });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `subforme-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setMessage("备份已导出。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "导出备份失败");
+    }
+  }
+
+  async function handleBackupRestore(file: File | null) {
+    if (!file) {
+      return;
+    }
+    if (!confirm("恢复会在下次重启 SubForMe 时覆盖当前配置和数据库，确定继续吗？")) {
+      return;
+    }
+    setRestoring(true);
+    try {
+      const form = new FormData();
+      form.append("backup", file);
+      const response = await fetch("/api/backup/restore", {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      const result = await response.json() as { message?: string };
+      setMessage(result.message || "备份已上传，SubForMe 正在自动重启并恢复数据。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "恢复备份失败");
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -128,6 +178,29 @@ export function XuiSettingsPage() {
           <div className="form-group">
             <label>健康检查间隔 (秒)</label>
             <input type="number" value={String(config.healthcheck_interval_seconds)} onChange={(e) => setConfig((c) => ({ ...c, healthcheck_interval_seconds: Number(e.target.value) || 0 }))} />
+          </div>
+        </div>
+      </div>
+
+      <div className="form-card" style={{ marginTop: 16 }}>
+        <div className="card-header"><h2>备份与恢复</h2></div>
+        <div className="form-grid">
+          <div className="form-group">
+            <label>导出备份</label>
+            <button type="button" className="btn" onClick={() => void handleBackupExport()}>
+              下载备份包
+            </button>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>包含配置文件、模板、数据库和 provider 文件。</span>
+          </div>
+          <div className="form-group">
+            <label>恢复备份</label>
+            <input
+              type="file"
+              accept=".zip,application/zip"
+              disabled={restoring}
+              onChange={(event) => void handleBackupRestore(event.target.files?.[0] || null)}
+            />
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>上传后会自动重启，启动时恢复备份内容。</span>
           </div>
         </div>
       </div>

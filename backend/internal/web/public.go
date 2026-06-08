@@ -88,15 +88,24 @@ func registerFrontendRoutes(mux *http.ServeMux, frontendDir string) {
 
 		p := strings.TrimPrefix(r.URL.Path, "/")
 		if p == "" {
+			setFrontendCacheHeaders(w, "index.html")
 			http.ServeFile(w, r, filepath.Join(frontendDir, "index.html"))
 			return
 		}
 		target := filepath.Join(frontendDir, p)
 		if info, err := os.Stat(target); err == nil && !info.IsDir() {
+			setFrontendCacheHeaders(w, p)
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 
+		setFrontendCacheHeaders(w, "index.html")
 		http.ServeFile(w, r, filepath.Join(frontendDir, "index.html"))
 	}))
+}
+
+func setFrontendCacheHeaders(w http.ResponseWriter, path string) {
+	if path == "index.html" || strings.HasPrefix(path, "assets/") {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
 }

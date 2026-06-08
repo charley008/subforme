@@ -5,7 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"time"
 
 	"subforme/backend/internal/app"
 	"subforme/backend/internal/config"
@@ -22,9 +24,27 @@ func main() {
 		ensureDefaultConfig(configDir, exeDir)
 	}
 
+	if restored, err := config.ApplyPendingRestore(configDir); err != nil {
+		log.Fatalf("apply pending restore: %v", err)
+	} else if restored {
+		log.Printf("applied pending restore from %s", configDir)
+	}
+
 	runtimeConfig, err := config.LoadRuntimeConfig(runtimePath)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if runtimeConfig.ConfigDir != configDir {
+		if restored, err := config.ApplyPendingRestore(runtimeConfig.ConfigDir); err != nil {
+			log.Fatalf("apply pending restore: %v", err)
+		} else if restored {
+			log.Printf("applied pending restore from %s", runtimeConfig.ConfigDir)
+			runtimeConfig, err = config.LoadRuntimeConfig(runtimePath)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
 	}
 
 	store, err := db.Open(runtimeConfig.ConfigDir)
@@ -53,6 +73,8 @@ func main() {
 		FrontendDir:         runtimeConfig.FrontendDir,
 		AdminUsername:       runtimeConfig.AdminUsername,
 		RuntimePath:         runtimeConfig.RuntimePath,
+		ConfigDir:           runtimeConfig.ConfigDir,
+		RestartAfterRestore: restartSelf,
 		AuthService:         authSvc,
 	})
 
@@ -60,6 +82,23 @@ func main() {
 	if err := http.ListenAndServe(runtimeConfig.Listen, handler); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func restartSelf() {
+	time.Sleep(800 * time.Millisecond)
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Printf("restart failed: resolve executable: %v", err)
+		os.Exit(1)
+	}
+	cmd := exec.Command(exePath, os.Args[1:]...)
+	cmd.Dir = filepath.Dir(exePath)
+	if err := cmd.Start(); err != nil {
+		log.Printf("restart failed: start new process: %v", err)
+		os.Exit(1)
+	}
+	log.Printf("restart scheduled: pid=%d", cmd.Process.Pid)
+	os.Exit(0)
 }
 
 func exeDirOrFail() string {

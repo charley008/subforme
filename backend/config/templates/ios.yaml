@@ -1,53 +1,68 @@
 proxies: []
 proxy-groups: []
 rule-providers:
-  proxy:
-    type: http
-    behavior: domain
-    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt
-    path: ./ruleset/proxy.yaml
-    interval: 86400
-    proxy: DIRECT
-  cncidr:
-    type: http
-    behavior: ipcidr
-    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt
-    path: ./ruleset/cncidr.yaml
-    interval: 86400
-    proxy: DIRECT
-  telegramcidr:
-    type: http
-    behavior: ipcidr
-    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/telegramcidr.txt
-    path: ./ruleset/telegramcidr.yaml
-    interval: 86400
-    proxy: DIRECT
   lancidr:
     type: http
     behavior: ipcidr
-    url: https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt
+    url: "https://fastly.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt"
     path: ./ruleset/lancidr.yaml
-    interval: 86400
     proxy: DIRECT
+    interval: 86400
+  xiaoshuo:
+    type: http
+    behavior: domain
+    url: "https://fastly.jsdelivr.net/gh/charley008/xiangseguige/xiaoshuo.yaml"
+    path: ./ruleset/xiaoshuo.yaml
+    proxy: DIRECT
+    interval: 86400
 rules:
+  - DOMAIN,fastly.jsdelivr.net,DIRECT
+  - DOMAIN,storeedgefd.dsx.mp.microsoft.com,PROXY
+  - DOMAIN,cn.bing.com,DIRECT
+  - DOMAIN,configurator.porsche.com,DIRECT
   - DOMAIN,api.cloudflare.com,DIRECT
+  - DOMAIN,dl.openwrt.ai,DIRECT
   - DOMAIN,www.gstatic.com,DIRECT
-  - DOMAIN,doh.dns.sb,AUTO
-  - DOMAIN,dns.google,AUTO
-  - DOMAIN,dns.cloudflare.com,AUTO
-  - GEOSITE,openai,PROXY
-  - GEOSITE,anthropic,PROXY
-  - GEOSITE,google-gemini,PROXY
-  - GEOSITE,tiktok,AUTO
-  - GEOSITE,github,AUTO
-  - GEOSITE,twitter,AUTO
-  - GEOSITE,youtube,AUTO
-  - GEOSITE,google,AUTO
+  - DOMAIN,copilot.microsoft.com,GPT
+  - DOMAIN,o33249.ingest.us.sentry.io,GPT
+  - DOMAIN,doh.dns.sb,PROXY
+  - DOMAIN,vscode.download.prss.microsoft.com,PROXY
+  - DOMAIN,dns.google,PROXY
+  - DOMAIN,dns.cloudflare.com,PROXY
+  - DOMAIN,gst.prod.dl.playstation.net,DIRECT
+  - DOMAIN-SUFFIX,guzzoni.apple.com,PROXY
+  - DOMAIN-SUFFIX,smoot.apple.com,PROXY
+  - DOMAIN-SUFFIX,apple-relay.cloudflare.com,PROXY
+  - DOMAIN-SUFFIX,apple-relay.fastly-edge.com,PROXY
+  - DOMAIN-SUFFIX,cp4.cloudflare.com,PROXY
+  - DOMAIN-SUFFIX,apple-relay.apple.com,PROXY
+  - DOMAIN-SUFFIX,gspe1-ssl.ls.apple.com,PROXY
+  - DOMAIN-SUFFIX,guzzoni.smoot.apple.com,PROXY
+  - DOMAIN-SUFFIX,douyin.com,DIRECT
+  - DOMAIN-SUFFIX,godaddy.com,PROXY
+  - DOMAIN-SUFFIX,immersivetranslate.com,PROXY
+  - DOMAIN-SUFFIX,deelp.com,DIRECT
+  - DOMAIN-SUFFIX,tjstats.com,DIRECT
+  - DOMAIN-KEYWORD,synocommunity,PROXY
+  - DOMAIN-SUFFIX,playstation.net,PROXY
+  - GEOSITE,openai,GPT
+  - GEOSITE,anthropic,GPT
+  - GEOSITE,google-gemini,GPT
+  - GEOSITE,tiktok,PROXY
+  - GEOSITE,github,PROXY
+  - GEOSITE,twitter,PROXY
+  - GEOSITE,youtube,PROXY
+  - GEOSITE,google,PROXY
+  - GEOSITE,private,DIRECT
+  - GEOSITE,microsoft@cn,DIRECT
+  - GEOSITE,microsoft,PROXY
+  - GEOSITE,apple-cn,DIRECT
+  - GEOSITE,steam,PROXY
+  - GEOSITE,steam@cn,DIRECT
+  - GEOSITE,cn,DIRECT
+  - GEOSITE,geolocation-!cn,PROXY
   - RULE-SET,lancidr,DIRECT
-  - RULE-SET,cncidr,DIRECT
-  - RULE-SET,proxy,AUTO
-  - RULE-SET,cncidr,DIRECT
-  - RULE-SET,telegramcidr,AUTO
+  - RULE-SET,xiaoshuo,DIRECT
   - GEOIP,private,DIRECT
-  - GEOIP,telegram,AUTO
-  - MATCH,DIRECT # default direct
+  - GEOIP,telegram,PROXY
+  - MATCH,DIRECT

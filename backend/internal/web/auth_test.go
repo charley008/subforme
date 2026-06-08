@@ -78,6 +78,30 @@ func TestLoginRefreshesTrafficAfterSuccess(t *testing.T) {
 	}
 }
 
+func TestLoginSetsPersistentSessionCookie(t *testing.T) {
+	router := NewRouter(Dependencies{
+		AuthService:   stubAuthService{valid: true},
+		SessionSecret: testSessionSecret,
+		DBService:     stubDBService{},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"username":"admin","password":"ok"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected one session cookie, got %d", len(cookies))
+	}
+	if cookies[0].MaxAge <= 0 {
+		t.Fatalf("expected persistent cookie MaxAge, got %d", cookies[0].MaxAge)
+	}
+	if cookies[0].Expires.IsZero() {
+		t.Fatal("expected persistent cookie Expires")
+	}
+}
+
 func TestAuthMeReturnsAuthenticatedWhenCookiePresent(t *testing.T) {
 	router := NewRouter(Dependencies{SessionSecret: testSessionSecret})
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)

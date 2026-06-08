@@ -6,9 +6,13 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+	"time"
 )
 
-const sessionCookieName = "subforme_session"
+const (
+	sessionCookieName = "subforme_session"
+	sessionMaxAge     = 30 * 24 * 60 * 60
+)
 
 type Service struct {
 	Username string
@@ -24,10 +28,13 @@ func (s *Service) UpdatePassword(newPassword string) {
 }
 
 func SetSession(w http.ResponseWriter, secret string) {
+	expires := time.Now().Add(time.Duration(sessionMaxAge) * time.Second)
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    signSessionValue("ok", secret),
 		Path:     "/",
+		MaxAge:   sessionMaxAge,
+		Expires:  expires,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})

@@ -268,6 +268,89 @@ export function UserPreviewPage() {
     return `${names.slice(0, 5).join(", ")} 等 ${names.length} 个`;
   }
 
+  function renderProviderSelector(user: UserSummary) {
+    if (providers.length === 0) {
+      return <span style={{ color: "#94a3b8", fontSize: 12 }}>无</span>;
+    }
+    return (
+      <div className="chip-group">
+        {providers.map((provider) => {
+          const checked = (user.selected_providers ?? []).includes(provider.id);
+          return (
+            <label key={provider.id} className={`chip ${checked ? "checked" : ""}`}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggleProvider(user, provider.id)}
+                disabled={busyUser === user.email}
+                style={{ margin: 0 }}
+              />
+              <span>{provider.name || provider.id}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function renderModeButtons(user: UserSummary) {
+    return (
+      <div className="btn-group">
+        <button
+          type="button"
+          className={`btn btn-sm ${user.mode === "whitelist" ? "btn-primary" : ""}`}
+          onClick={() => void updatePolicy(user, { mode: "whitelist" })}
+          disabled={busyUser === user.email}
+        >
+          默认直连
+        </button>
+        <button
+          type="button"
+          className={`btn btn-sm ${user.mode === "blacklist" ? "btn-primary" : ""}`}
+          onClick={() => void updatePolicy(user, { mode: "blacklist" })}
+          disabled={busyUser === user.email}
+        >
+          默认代理
+        </button>
+      </div>
+    );
+  }
+
+  function renderShareControls(user: UserSummary) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <select
+            value={shareTypes[user.email] || "default"}
+            onChange={(event) => setShareTypes((current) => ({ ...current, [user.email]: event.target.value }))}
+            style={{
+              width: 120,
+              padding: "4px 8px",
+              border: "1px solid var(--gray-300)",
+              borderRadius: 8,
+              background: "var(--white)",
+              color: "var(--gray-900)",
+              fontSize: 12,
+            }}
+          >
+            <option value="default">默认订阅</option>
+            <option value="ios">iOS 订阅</option>
+          </select>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => void handleCopy(shareURLForUser(user))}
+          >
+            复制链接
+          </button>
+        </div>
+        <span style={{ fontSize: 11, color: "#94a3b8", wordBreak: "break-all" }}>
+          {shareURLForUser(user)}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -286,7 +369,8 @@ export function UserPreviewPage() {
           </div>
         </div>
       ) : (
-        <div className="table-container">
+        <>
+        <div className="table-container users-table">
           <table className="modern-table">
             <thead>
               <tr>
@@ -338,47 +422,10 @@ export function UserPreviewPage() {
                     </button>
                   </td>
                   <td>
-                    {providers.length > 0 ? (
-                      <div className="chip-group">
-                        {providers.map((provider) => {
-                          const checked = (user.selected_providers ?? []).includes(provider.id);
-                          return (
-                            <label key={provider.id} className={`chip ${checked ? "checked" : ""}`}>
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => toggleProvider(user, provider.id)}
-                                disabled={busyUser === user.email}
-                                style={{ margin: 0 }}
-                              />
-                              <span>{provider.name || provider.id}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <span style={{ color: "#94a3b8", fontSize: 12 }}>无</span>
-                    )}
+                    {renderProviderSelector(user)}
                   </td>
                   <td>
-                    <div className="btn-group">
-                      <button
-                        type="button"
-                        className={`btn btn-sm ${user.mode === "whitelist" ? "btn-primary" : ""}`}
-                        onClick={() => void updatePolicy(user, { mode: "whitelist" })}
-                        disabled={busyUser === user.email}
-                      >
-                        默认直连
-                      </button>
-                      <button
-                        type="button"
-                        className={`btn btn-sm ${user.mode === "blacklist" ? "btn-primary" : ""}`}
-                        onClick={() => void updatePolicy(user, { mode: "blacklist" })}
-                        disabled={busyUser === user.email}
-                      >
-                        默认代理
-                      </button>
-                    </div>
+                    {renderModeButtons(user)}
                   </td>
                   <td>
                     <button
@@ -391,42 +438,72 @@ export function UserPreviewPage() {
                     </button>
                   </td>
                   <td style={{ width: 260 }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <select
-                          value={shareTypes[user.email] || "default"}
-                          onChange={(event) => setShareTypes((current) => ({ ...current, [user.email]: event.target.value }))}
-                          style={{
-                            width: 120,
-                            padding: "4px 8px",
-                            border: "1px solid var(--gray-300)",
-                            borderRadius: 8,
-                            background: "var(--white)",
-                            color: "var(--gray-900)",
-                            fontSize: 12,
-                          }}
-                        >
-                          <option value="default">默认订阅</option>
-                          <option value="ios">iOS 订阅</option>
-                        </select>
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          onClick={() => void handleCopy(shareURLForUser(user))}
-                        >
-                          复制链接
-                        </button>
-                      </div>
-                      <span style={{ fontSize: 11, color: "#94a3b8", wordBreak: "break-all", maxWidth: 260 }}>
-                        {shareURLForUser(user)}
-                      </span>
-                    </div>
+                    {renderShareControls(user)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <div className="users-mobile-list">
+          {users.map((user) => (
+            <div className="user-card" key={user.email}>
+              <div className="user-card-header">
+                <div>
+                  <strong>{user.email}</strong>
+                  <span>{user.protocol || user.remark || ""}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => void handlePreview(user)}
+                  disabled={busyUser === user.email}
+                >
+                  {busyUser === user.email ? "..." : "预览"}
+                </button>
+              </div>
+              <div className="user-card-section">
+                <span className="user-card-label">节点</span>
+                <div className="user-card-row">
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => openNodeEditor(user)}
+                    disabled={busyUser === user.email}
+                  >
+                    节点设置
+                  </button>
+                  <span>{nodeSummary(user)}</span>
+                </div>
+              </div>
+              <div className="user-card-section">
+                <span className="user-card-label">分组</span>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => openGroupEditor(user)}
+                  disabled={busyUser === user.email}
+                >
+                  分组设置
+                </button>
+              </div>
+              <div className="user-card-section">
+                <span className="user-card-label">第三方订阅</span>
+                {renderProviderSelector(user)}
+              </div>
+              <div className="user-card-section">
+                <span className="user-card-label">模式</span>
+                {renderModeButtons(user)}
+              </div>
+              <div className="user-card-section">
+                <span className="user-card-label">分享</span>
+                {renderShareControls(user)}
+              </div>
+              <div className="user-card-id">{user.uuid || user.password || "-"}</div>
+            </div>
+          ))}
+        </div>
+        </>
       )}
 
       <div className="message" style={{ marginTop: 16 }}>

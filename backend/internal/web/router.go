@@ -86,6 +86,8 @@ type Dependencies struct {
 	DBService           DBService
 	AdminUsername       string
 	RuntimePath         string
+	ConfigDir           string
+	RestartAfterRestore func()
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -103,6 +105,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	registerAuthRoutes(mux, deps)
 	registerDashboardRoutes(mux, deps)
 	registerConfigRoutes(mux, deps)
+	registerBackupRoutes(mux, deps)
 	registerPreviewRoutes(mux, deps)
 	registerDBRoutes(mux, deps)
 
