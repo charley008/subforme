@@ -4,6 +4,7 @@ node_modules/
 dist/
 .vite/
 *.log
+PROJECT_LOG.md
 .env
 .superpowers/
 .DS_Store
