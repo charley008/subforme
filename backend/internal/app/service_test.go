@@ -46,6 +46,33 @@ func TestSameRemoteClientIgnoresEnable(t *testing.T) {
 	}
 }
 
+func TestDesiredInboundTagsIncludesDisabledAssignments(t *testing.T) {
+	assignments := []db.UserAssignment{{
+		EmailOnServer: "alice",
+		InboundID:     10,
+		Enable:        false,
+	}}
+	inbounds := map[int64]db.Inbound{
+		10: {Protocol: "vless", Listen: "", Port: 443, Remark: "HK"},
+	}
+
+	got := desiredInboundTagsByEmail(assignments, inbounds)
+	if len(got["alice"]) != 1 {
+		t.Fatalf("expected disabled assignment to remain sync-desired, got %#v", got)
+	}
+}
+
+func TestBuildXUIClientDoesNotPropagateDisabledState(t *testing.T) {
+	got := buildXUIClient("vless", db.User{
+		Email:  "alice",
+		UUID:   "uuid-1",
+		Enable: false,
+	})
+	if !got.Enable {
+		t.Fatal("expected synced client payload to stay enabled by default")
+	}
+}
+
 func TestRemoveClientFromSettingsPreservesInboundSettings(t *testing.T) {
 	raw := `{"clients":[{"email":"alice","id":"uuid-1"},{"email":"bob","id":"uuid-2"}],"encryption":"none"}`
 	got := removeClientFromSettings(raw, "alice")

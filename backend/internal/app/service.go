@@ -1361,9 +1361,6 @@ func dbInboundsByTag(inbounds []db.Inbound) map[string]db.Inbound {
 func desiredInboundTagsByEmail(assignments []db.UserAssignment, inbounds map[int64]db.Inbound) map[string][]string {
 	out := map[string][]string{}
 	for _, a := range assignments {
-		if !a.Enable {
-			continue
-		}
 		inb, ok := inbounds[a.InboundID]
 		if !ok {
 			continue
@@ -1442,7 +1439,7 @@ func buildXUIClient(protocol string, u db.User) xui.InboundClient {
 		TgID:       u.TgID,
 		Reset:      u.Reset,
 		Comment:    u.Comment,
-		Enable:     u.Enable,
+		Enable:     true,
 	})
 }
 
