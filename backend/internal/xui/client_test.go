@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"strings"
 	"testing"
 )
 
@@ -120,17 +118,18 @@ func TestUpdateClientByEmailEscapesEmailAndTriesFallbacks(t *testing.T) {
 	}
 }
 
-func TestAddInboundUsesFormAndStripsClients(t *testing.T) {
-	var gotForm url.Values
+func TestAddInboundUsesJSONAndStripsClients(t *testing.T) {
+	var gotBody map[string]any
+	var gotContentType string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/panel/api/inbounds/add" {
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			t.Fatalf("parse form: %v", err)
+		gotContentType = r.Header.Get("Content-Type")
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decode request body: %v", err)
 		}
-		gotForm = r.Form
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"success":true}`))
 	}))
@@ -151,10 +150,14 @@ func TestAddInboundUsesFormAndStripsClients(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddInbound returned error: %v", err)
 	}
-	if gotForm.Get("protocol") != "vless" {
-		t.Fatalf("unexpected form: %#v", gotForm)
+	if gotContentType != "application/json" {
+		t.Fatalf("expected json content type, got %q", gotContentType)
 	}
-	if strings.Contains(gotForm.Get("settings"), `"email":"a"`) {
-		t.Fatalf("expected clients to be stripped, got %s", gotForm.Get("settings"))
+	if gotBody["protocol"] != "vless" {
+		t.Fatalf("unexpected body: %#v", gotBody)
+	}
+	settings := gotBody["settings"].(map[string]any)
+	if len(settings["clients"].([]any)) != 0 {
+		t.Fatalf("expected clients to be stripped, got %#v", settings["clients"])
 	}
 }

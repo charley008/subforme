@@ -234,11 +234,19 @@ func (c *Client) listClientsAt(ctx context.Context, endpoint string) ([]ClientLi
 }
 
 func (c *Client) AddInbound(ctx context.Context, inbound InboundRecord) error {
-	return c.postFormCandidates(ctx, c.inboundActionCandidates("add"), inboundForm(inbound), "add inbound")
+	body, err := inboundJSONBody(inbound)
+	if err != nil {
+		return err
+	}
+	return c.postJSONCandidates(ctx, c.inboundActionCandidates("add"), body, "add inbound")
 }
 
 func (c *Client) UpdateInbound(ctx context.Context, inboundID int, inbound InboundRecord) error {
-	return c.postFormCandidates(ctx, c.inboundActionCandidates("update/"+strconv.Itoa(inboundID)), inboundForm(inbound), "update inbound")
+	body, err := inboundJSONBody(inbound)
+	if err != nil {
+		return err
+	}
+	return c.postJSONCandidates(ctx, c.inboundActionCandidates("update/"+strconv.Itoa(inboundID)), body, "update inbound")
 }
 
 func (c *Client) DeleteInbound(ctx context.Context, inboundID int) error {
@@ -393,58 +401,52 @@ func (c *Client) postJSONCandidates(ctx context.Context, endpoints []string, bod
 	return lastErr
 }
 
-func (c *Client) postFormCandidates(ctx context.Context, endpoints []string, values url.Values, action string) error {
-	var lastErr error
-	for _, endpoint := range endpoints {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(values.Encode()))
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-		resp, err := c.Do(ctx, req)
-		if err != nil {
-			return err
-		}
-		raw, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if readErr != nil {
-			return readErr
-		}
-		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("%s at %s returned %s", action, endpoint, resp.Status)
-			continue
-		}
-		if len(strings.TrimSpace(string(raw))) == 0 {
-			return nil
-		}
-		var apiResp apiResponse
-		if err := json.Unmarshal(raw, &apiResp); err != nil {
-			return nil
-		}
-		if !apiResp.Success {
-			return fmt.Errorf("%s rejected: %s", action, apiResp.Msg)
-		}
-		return nil
-	}
-	return lastErr
+type inboundBody struct {
+	Total          int64  `json:"total"`
+	Remark         string `json:"remark"`
+	Enable         bool   `json:"enable"`
+	ExpiryTime     int64  `json:"expiryTime"`
+	Listen         string `json:"listen"`
+	Port           int    `json:"port"`
+	Protocol       string `json:"protocol"`
+	Settings       any    `json:"settings"`
+	StreamSettings any    `json:"streamSettings"`
+	Tag            string `json:"tag"`
+	Sniffing       any    `json:"sniffing"`
+	TrafficReset   string `json:"trafficReset"`
 }
 
-func inboundForm(inbound InboundRecord) url.Values {
-	values := url.Values{}
-	values.Set("total", strconv.FormatInt(inbound.Total, 10))
-	values.Set("remark", inbound.Remark)
-	values.Set("enable", strconv.FormatBool(inbound.Enable))
-	values.Set("expiryTime", strconv.FormatInt(inbound.ExpiryTime, 10))
-	values.Set("listen", inbound.Listen)
-	values.Set("port", strconv.Itoa(inbound.Port))
-	values.Set("protocol", inbound.Protocol)
-	values.Set("settings", stripInboundClients(inbound.Settings))
-	values.Set("streamSettings", inbound.StreamSettings)
-	values.Set("tag", inbound.Tag)
-	values.Set("sniffing", inbound.Sniffing)
-	values.Set("trafficReset", inbound.TrafficReset)
-	return values
+func inboundJSONBody(inbound InboundRecord) (string, error) {
+	body := inboundBody{
+		Total:          inbound.Total,
+		Remark:         inbound.Remark,
+		Enable:         inbound.Enable,
+		ExpiryTime:     inbound.ExpiryTime,
+		Listen:         inbound.Listen,
+		Port:           inbound.Port,
+		Protocol:       inbound.Protocol,
+		Settings:       rawJSONValue(stripInboundClients(inbound.Settings), map[string]any{}),
+		StreamSettings: rawJSONValue(inbound.StreamSettings, map[string]any{}),
+		Tag:            inbound.Tag,
+		Sniffing:       rawJSONValue(inbound.Sniffing, map[string]any{}),
+		TrafficReset:   inbound.TrafficReset,
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("marshal inbound json body: %w", err)
+	}
+	return string(b), nil
+}
+
+func rawJSONValue(raw string, fallback any) any {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return fallback
+	}
+	if json.Valid([]byte(trimmed)) {
+		return json.RawMessage(trimmed)
+	}
+	return raw
 }
 
 func stripInboundClients(raw string) string {
