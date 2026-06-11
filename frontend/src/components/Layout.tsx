@@ -88,7 +88,14 @@ export function Layout() {
           <button className="sidebar-theme" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
             <span className="nav-label">{theme === "dark" ? "浅色模式" : "深色模式"}</span>
           </button>
-          <div className="sidebar-version">{version}</div>
+          <a
+            className="sidebar-version"
+            href="https://github.com/charley008/subforme"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {version}
+          </a>
           <button className="sidebar-logout" type="button" onClick={() => void handleLogout()}>
             <span className="nav-label">退出</span>
           </button>

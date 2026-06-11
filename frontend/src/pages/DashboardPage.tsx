@@ -165,7 +165,7 @@ export function DashboardPage() {
       {chart.length > 0 && (
         <div className="card" style={{ marginTop: 20 }}>
           <div className="card-header">
-            <h2>节点总流量</h2>
+            <h2>服务器总流量</h2>
           </div>
           <div className="card-body" style={{ padding: "16px 20px" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

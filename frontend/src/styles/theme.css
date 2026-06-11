@@ -192,10 +192,17 @@ textarea:disabled {
 }
 
 .sidebar-version {
+  display: block;
   padding: 4px 14px 8px;
   font-size: 11px;
   color: var(--sidebar-text);
   opacity: 0.75;
+  text-decoration: none;
+}
+
+.sidebar-version:hover {
+  color: #ffffff;
+  opacity: 1;
 }
 
 /* ===== Main Content ===== */
