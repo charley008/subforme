@@ -167,19 +167,31 @@ docker build -t subforme:latest .
 
 ```
 subforme/
+├── .github/          # GitHub Actions 工作流
 ├── backend/          # Go 后端
 │   ├── cmd/subforme/ # 入口
+│   ├── config/       # 默认配置与模板
 │   ├── internal/     # 业务逻辑
 │   │   ├── app/      # 服务层
+│   │   ├── auth/     # 登录与会话
+│   │   ├── cache/    # 内存缓存
 │   │   ├── config/   # 配置管理
 │   │   ├── db/       # SQLite 数据库层
 │   │   ├── generator/# YAML 生成器
 │   │   ├── groups/   # 代理分组
 │   │   ├── web/      # HTTP API
 │   │   └── xui/      # 3x-ui API 客户端
-│   └── config/       # 默认配置
+│   └── pkg/          # 可复用内部包
+├── docs/             # 项目文档
 ├── frontend/         # React + Vite 前端
-└── release/          # 构建产物
+│   ├── src/          # 前端源码
+│   ├── index.html    # Vite 入口 HTML
+│   ├── package.json  # 前端依赖与脚本
+│   └── vite.config.ts
+├── Dockerfile
+├── docker-compose.yml
+├── README.md
+└── RELEASE_NOTES.md
 ```
 
 ## 技术栈
