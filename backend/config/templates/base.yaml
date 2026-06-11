@@ -1,25 +1,27 @@
 mixed-port: 7890
 allow-lan: true
 bind-address: "*"
+unified-delay: true
 mode: rule
 log-level: info
 ipv6: true
+
 sniffer:
   enable: true
   sniff:
     TLS:
       ports:
         - 443
-        - 6443
     HTTP:
       ports:
         - 80
         - 8080-8880
       override-destination: true
+
 dns:
   enable: true
   ipv6: false
-  listen: ":53"
+  listen: 127.0.0.1:1053
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/16
   prefer-h3: false
@@ -30,12 +32,26 @@ dns:
     - "*.lan"
     - "*.local"
     - "*.arpa"
+    - "*.ts.net"
     - "time.*.com"
     - "ntp.*.com"
-    - "+.market.xiaomi.com"
-    - "localhost.ptlogin2.qq.com"
-    - "*.msftncsi.com"
+    - "pool.ntp.org"
+    - "time.windows.com"
+    - "time.apple.com"
+    - "time.asia.apple.com"
+    - "time-ios.apple.com"
+    - "captive.apple.com"
+    - "+.msftconnecttest.com"
+    - "+.msftncsi.com"
     - "www.msftconnecttest.com"
+    - "*.msftncsi.com"
+    - "localhost.ptlogin2.qq.com"
+    - "+.market.xiaomi.com"
+    - "+.cmpassport.com"
+    - "id6.me"
+    - "+.10099.com.cn"
+    - "xbox.*.*.microsoft.com"
+    - "*.*.xboxlive.com"
   default-nameserver:
     - 223.5.5.5
     - 119.29.29.29
@@ -43,10 +59,10 @@ dns:
     - https://doh.pub/dns-query
     - https://dns.alidns.com/dns-query
   fallback:
-    - https://doh.dns.sb/dns-query#AUTO
-    - https://dns.cloudflare.com/dns-query#AUTO
-    - https://dns.adguard-dns.com/dns-query#AUTO
-    - https://dns.google/dns-query#AUTO
+    - https://doh.dns.sb/dns-query
+    - https://dns.cloudflare.com/dns-query
+    - https://dns.adguard-dns.com/dns-query
+    - https://dns.google/dns-query
   fallback-filter:
     geoip: true
     geoip-code: CN
@@ -65,6 +81,7 @@ dns:
   proxy-server-nameserver:
     - https://doh.pub/dns-query
     - https://dns.alidns.com/dns-query
+
 tun:
   enable: false
   stack: gvisor
@@ -73,4 +90,5 @@ tun:
   dns-hijack:
     - any:53
     - tcp://any:53
+
 proxy-providers: {}
