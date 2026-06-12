@@ -1,0 +1,24 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="subforme-bg" x1="18" y1="14" x2="112" y2="114" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="subforme-accent" x1="34" y1="26" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="subforme-core" x1="46" y1="34" x2="84" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#CBD5E1"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="108" height="108" rx="28" fill="url(#subforme-bg)"/>
+  <path d="M38 39C38 31.8203 43.8203 26 51 26H84C88.4183 26 92 29.5817 92 34C92 38.4183 88.4183 42 84 42H56C52.6863 42 50 44.6863 50 48C50 51.3137 52.6863 54 56 54H74C83.9411 54 92 62.0589 92 72C92 81.9411 83.9411 90 74 90H43C38.5817 90 35 86.4183 35 82C35 77.5817 38.5817 74 43 74H72C75.3137 74 78 71.3137 78 68C78 64.6863 75.3137 62 72 62H51C43.8203 62 38 56.1797 38 49V39Z" fill="url(#subforme-core)"/>
+  <path d="M27 36H39" stroke="url(#subforme-accent)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M90 84H102" stroke="url(#subforme-accent)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="23" cy="36" r="7" fill="#22D3EE"/>
+  <circle cx="105" cy="84" r="7" fill="#34D399"/>
+  <circle cx="97" cy="30" r="5" fill="#F59E0B"/>
+  <path d="M92 34L97 30" stroke="#F59E0B" stroke-width="4" stroke-linecap="round"/>
+</svg>

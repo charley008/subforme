@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { getJSON, postJSON } from "../lib/api";
 import type { AuthStatus } from "../lib/types";
+import brandLogo from "../assets/subforme-logo.svg";
 
 const navItems = [
   { to: "/", label: "概览", end: true },
@@ -73,8 +74,11 @@ export function Layout() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <div className="logo-icon">S</div>
-            <span>SubForMe</span>
+            <img className="logo-icon" src={brandLogo} alt="SubForMe" />
+            <div className="sidebar-logo-copy">
+              <span>SubForMe</span>
+              <small>Mihomo Control</small>
+            </div>
           </div>
         </div>
         <nav className="sidebar-nav">

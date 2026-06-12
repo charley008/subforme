@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getJSON, postJSON } from "../lib/api";
 import type { AuthStatus } from "../lib/types";
+import brandLogo from "../assets/subforme-logo.svg";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -36,7 +37,7 @@ export function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <div className="login-logo">S</div>
+          <img className="login-logo" src={brandLogo} alt="SubForMe" />
           <h1>SubForMe</h1>
           <p>Mihomo 配置管理系统</p>
         </div>
