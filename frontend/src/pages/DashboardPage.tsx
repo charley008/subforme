@@ -58,6 +58,20 @@ function trafficRows(data: Record<string, ServerTraffic[]>): UserBars[] {
     .sort((a, b) => b.total - a.total);
 }
 
+function scaleLoadedTrafficRows(rows: UserBars[]): UserBars[] {
+  return rows
+    .map((row) => ({
+      ...row,
+      bars: row.bars.map((bar) => ({
+        ...bar,
+        total: bar.total * TRAFFIC_DISPLAY_MULTIPLIER,
+      })),
+      total: row.total * TRAFFIC_DISPLAY_MULTIPLIER,
+    }))
+    .filter((row) => row.total > 0)
+    .sort((a, b) => b.total - a.total);
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [chart, setChart] = useState<UserBars[]>([]);
@@ -92,8 +106,9 @@ export function DashboardPage() {
 
   async function loadTrafficSummary() {
     const rows = await getJSON<UserBars[]>("/api/dashboard/traffic").catch(() => [] as UserBars[]);
-    setChart(rows);
-    return rows;
+    const scaledRows = scaleLoadedTrafficRows(rows);
+    setChart(scaledRows);
+    return scaledRows;
   }
 
   async function loadDashboard() {
