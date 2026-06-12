@@ -34,6 +34,7 @@ type ServerTraffic = {
 };
 
 const COLORS = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
+const TRAFFIC_DISPLAY_MULTIPLIER = 2;
 
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return "0";
@@ -46,8 +47,12 @@ function trafficRows(data: Record<string, ServerTraffic[]>): UserBars[] {
   return Object.entries(data)
     .map(([email, traffic]) => ({
       email,
-      bars: traffic.map((t) => ({ server_id: t.server_id, server_name: t.server_name, total: t.up + t.down })),
-      total: traffic.reduce((sum, t) => sum + t.up + t.down, 0),
+      bars: traffic.map((t) => ({
+        server_id: t.server_id,
+        server_name: t.server_name,
+        total: (t.up + t.down) * TRAFFIC_DISPLAY_MULTIPLIER,
+      })),
+      total: traffic.reduce((sum, t) => sum + (t.up + t.down) * TRAFFIC_DISPLAY_MULTIPLIER, 0),
     }))
     .filter((row) => row.total > 0)
     .sort((a, b) => b.total - a.total);
