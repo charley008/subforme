@@ -11,35 +11,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var templateKeyOrder = []string{
-	"mixed-port",
-	"port",
-	"socks-port",
-	"redir-port",
-	"tproxy-port",
-	"allow-lan",
-	"bind-address",
-	"authentication",
-	"skip-auth-prefixes",
-	"lan-allowed-ips",
-	"mode",
-	"log-level",
-	"external-controller",
-	"external-ui",
-	"external-ui-name",
-	"external-ui-url",
-	"secret",
-	"ipv6",
-	"sniffer",
-	"dns",
-	"tun",
-	"proxies",
-	"proxy-groups",
-	"proxy-providers",
-	"rule-providers",
-	"rules",
-}
-
 func ensureTemplateLayout(dir string) error {
 	templatesDir := filepath.Join(dir, "templates")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
@@ -168,20 +139,8 @@ func mergeTemplateSections(baseRaw, modeRaw string) (string, error) {
 	mergedRoot := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 	used := map[string]bool{}
 
-	for _, key := range templateKeyOrder {
-		if value, ok := mappingValue(modeRoot, key); ok {
-			appendPair(mergedRoot, key, value)
-			used[key] = true
-			continue
-		}
-		if value, ok := mappingValue(baseRoot, key); ok {
-			appendPair(mergedRoot, key, value)
-			used[key] = true
-		}
-	}
-
-	appendUnknownKeys(mergedRoot, baseRoot, used)
-	appendUnknownKeys(mergedRoot, modeRoot, used)
+	appendMergedKeysPreservingSourceOrder(mergedRoot, baseRoot, modeRoot, used)
+	appendRemainingKeysInSourceOrder(mergedRoot, modeRoot, used)
 
 	return stringMust(yamlx.Marshal(mergedRoot))
 }
@@ -230,7 +189,22 @@ func appendPair(root *yaml.Node, key string, value *yaml.Node) {
 	root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, cloneYAMLNode(value))
 }
 
-func appendUnknownKeys(target, source *yaml.Node, used map[string]bool) {
+func appendMergedKeysPreservingSourceOrder(target, primary, override *yaml.Node, used map[string]bool) {
+	for i := 0; i < len(primary.Content)-1; i += 2 {
+		key := primary.Content[i].Value
+		if used[key] {
+			continue
+		}
+		if value, ok := mappingValue(override, key); ok {
+			appendPair(target, key, value)
+		} else {
+			appendPair(target, key, primary.Content[i+1])
+		}
+		used[key] = true
+	}
+}
+
+func appendRemainingKeysInSourceOrder(target, source *yaml.Node, used map[string]bool) {
 	for i := 0; i < len(source.Content)-1; i += 2 {
 		key := source.Content[i].Value
 		if used[key] {
