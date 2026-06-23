@@ -54,6 +54,9 @@ type Node2 struct {
 	Name     string `json:"name"`
 	Address  string `json:"address"`
 	Port     int    `json:"port"`
+	Protocol string `json:"protocol,omitempty"`
+	Network  string `json:"network,omitempty"`
+	Flow     string `json:"flow,omitempty"`
 	ServerID int64  `json:"server_id,omitempty"`
 }
 

@@ -10,7 +10,6 @@ type GroupDef = {
 };
 
 const defaultGroupType = "select";
-const defaultTestURL = "https://www.gstatic.com/generate_204";
 const defaultInterval = 300;
 
 export function GroupsPage() {
@@ -22,8 +21,6 @@ export function GroupsPage() {
   const [draftGroup, setDraftGroup] = useState<GroupDef>({
     name: "",
     type: defaultGroupType,
-    url: defaultTestURL,
-    interval: defaultInterval,
   });
 
   useEffect(() => {
@@ -62,8 +59,8 @@ export function GroupsPage() {
       ...draftGroup,
       name,
       type: editingGroup?.type || draftGroup.type || defaultGroupType,
-      url: draftGroup.url?.trim() || defaultTestURL,
-      interval: draftGroup.interval || defaultInterval,
+      url: draftGroup.url?.trim() || "",
+      interval: draftGroup.interval || 0,
     };
 
     const duplicate = groups.some((group) => group.name === nextGroup.name && group.name !== editingGroup?.name);
@@ -85,8 +82,8 @@ export function GroupsPage() {
     setDraftGroup({
       ...group,
       type: group.type || defaultGroupType,
-      url: group.url || defaultTestURL,
-      interval: group.interval || defaultInterval,
+      url: group.url || "",
+      interval: group.interval || 0,
     });
   }
 
@@ -99,8 +96,8 @@ export function GroupsPage() {
     setDraftGroup({
       name: "",
       type: defaultGroupType,
-      url: defaultTestURL,
-      interval: defaultInterval,
+      url: "",
+      interval: 0,
       provider: "",
     });
   }
@@ -135,8 +132,8 @@ export function GroupsPage() {
                 <td>
                   <strong>{group.name}</strong>
                 </td>
-                <td style={{ fontSize: 12, fontFamily: "monospace" }}>{group.url || "-"}</td>
-                <td>{group.interval || "-"}</td>
+                <td style={{ fontSize: 12, fontFamily: "monospace" }}>{group.provider ? group.url || "-" : "-"}</td>
+                <td>{group.provider ? group.interval || "-" : "-"}</td>
                 <td>{group.provider ? <span className="badge badge-warning">{group.provider}</span> : "-"}</td>
                 <td>
                   <div className="btn-group">
@@ -170,22 +167,6 @@ export function GroupsPage() {
             />
           </div>
           <div className="form-group">
-            <label>URL</label>
-            <input
-              value={draftGroup.url ?? defaultTestURL}
-              onChange={(event) => setDraftGroup((current) => ({ ...current, url: event.target.value }))}
-              placeholder={defaultTestURL}
-            />
-          </div>
-          <div className="form-group">
-            <label>间隔 (秒)</label>
-            <input
-              type="number"
-              value={draftGroup.interval ?? defaultInterval}
-              onChange={(event) => setDraftGroup((current) => ({ ...current, interval: Number(event.target.value) || defaultInterval }))}
-            />
-          </div>
-          <div className="form-group">
             <label>第三方 Provider</label>
             <input
               value={draftGroup.provider ?? ""}
@@ -196,6 +177,27 @@ export function GroupsPage() {
               填写 provider 名称后，该分组会使用 <code>use</code> 引用第三方订阅。
             </span>
           </div>
+          {draftGroup.provider ? (
+            <>
+              <div className="form-group">
+                <label>URL</label>
+                <input
+                  value={draftGroup.url ?? ""}
+                  onChange={(event) => setDraftGroup((current) => ({ ...current, url: event.target.value }))}
+                  placeholder="第三方 Provider 分组测速 URL"
+                />
+              </div>
+              <div className="form-group">
+                <label>间隔 (秒)</label>
+                <input
+                  type="number"
+                  value={draftGroup.interval ? String(draftGroup.interval) : ""}
+                  placeholder={String(defaultInterval)}
+                  onChange={(event) => setDraftGroup((current) => ({ ...current, interval: Number(event.target.value) || 0 }))}
+                />
+              </div>
+            </>
+          ) : null}
         </div>
         <div className="form-footer">
           {editingGroup ? (

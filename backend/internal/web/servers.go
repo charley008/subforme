@@ -143,7 +143,9 @@ func handleServerImport(deps Dependencies) http.HandlerFunc {
 			writeError(w, "invalid server id")
 			return
 		}
-		result, err := deps.DBService.ImportFromServer(context.Background(), id)
+		ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+		defer cancel()
+		result, err := deps.DBService.ImportFromServer(ctx, id)
 		if err != nil {
 			writeError(w, err.Error())
 			return

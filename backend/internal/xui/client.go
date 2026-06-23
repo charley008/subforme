@@ -3,6 +3,7 @@ package xui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,14 +30,17 @@ type Client struct {
 
 func NewClient(baseURL, apiKey, username, password string) *Client {
 	jar, _ := cookiejar.New(nil)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
 	return &Client{
 		BaseURL:  strings.TrimRight(baseURL, "/"),
 		APIKey:   apiKey,
 		Username: username,
 		Password: password,
 		HTTP: &http.Client{
-			Jar:     jar,
-			Timeout: 15 * time.Second,
+			Jar:       jar,
+			Timeout:   60 * time.Second,
+			Transport: transport,
 		},
 	}
 }
@@ -55,17 +59,17 @@ func (c *Client) ListInbounds(ctx context.Context) ([]InboundRecord, error) {
 		return nil, fmt.Errorf("xui base url is not configured")
 	}
 
-	var lastErr error
+	var errs []error
 	for _, endpoint := range c.inboundListCandidates() {
 		rows, _, err := c.listInboundsAt(ctx, endpoint)
 		if err == nil {
 			return rows, nil
 		}
-		lastErr = err
+		errs = append(errs, err)
 	}
 
-	if lastErr != nil {
-		return nil, lastErr
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 	return nil, fmt.Errorf("xui list inbounds returned no candidates")
 }
@@ -74,58 +78,62 @@ func (c *Client) ListClients(ctx context.Context) ([]ClientListRecord, error) {
 	if c.BaseURL == "" {
 		return nil, fmt.Errorf("xui base url is not configured")
 	}
-	var lastErr error
+	var errs []error
 	for _, endpoint := range c.clientActionCandidates("list") {
 		rows, err := c.listClientsAt(ctx, endpoint)
 		if err == nil {
 			return rows, nil
 		}
-		lastErr = err
+		errs = append(errs, err)
 	}
-	if lastErr != nil {
-		return nil, lastErr
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 	return nil, fmt.Errorf("xui list clients returned no candidates")
 }
 
 func (c *Client) joinURL(nextPath string) (string, error) {
+	return c.joinURLWithBasePath(nextPath, true)
+}
+
+func (c *Client) joinRootURL(nextPath string) (string, error) {
+	return c.joinURLWithBasePath(nextPath, false)
+}
+
+func (c *Client) joinURLWithBasePath(nextPath string, keepBasePath bool) (string, error) {
 	base, err := url.Parse(c.BaseURL)
 	if err != nil {
 		return "", fmt.Errorf("parse xui base url: %w", err)
 	}
-	base.Path = path.Join(base.Path, nextPath)
+	if keepBasePath {
+		base.Path = path.Join(base.Path, nextPath)
+	} else {
+		base.Path = path.Join("/", nextPath)
+	}
 	return base.String(), nil
 }
 
 func (c *Client) inboundListCandidates() []string {
 	return c.candidateURLs(
 		"/panel/api/inbounds/list",
-		"/xui/panel/api/inbounds/list",
-		"/api/inbounds/list",
 	)
 }
 
 func (c *Client) inboundActionCandidates(action string) []string {
 	return c.candidateURLs(
-		"/panel/api/inbounds/"+strings.TrimLeft(action, "/"),
-		"/xui/panel/api/inbounds/"+strings.TrimLeft(action, "/"),
-		"/api/inbounds/"+strings.TrimLeft(action, "/"),
+		"/panel/api/inbounds/" + strings.TrimLeft(action, "/"),
 	)
 }
 
 func (c *Client) clientActionCandidates(action string) []string {
 	return c.candidateURLs(
-		"/panel/api/clients/"+strings.TrimLeft(action, "/"),
-		"/xui/panel/api/clients/"+strings.TrimLeft(action, "/"),
-		"/api/clients/"+strings.TrimLeft(action, "/"),
+		"/panel/api/clients/" + strings.TrimLeft(action, "/"),
 	)
 }
 
 func (c *Client) serverActionCandidates(action string) []string {
 	return c.candidateURLs(
-		"/panel/api/server/"+strings.TrimLeft(action, "/"),
-		"/xui/panel/api/server/"+strings.TrimLeft(action, "/"),
-		"/api/server/"+strings.TrimLeft(action, "/"),
+		"/panel/api/server/" + strings.TrimLeft(action, "/"),
 	)
 }
 
@@ -133,8 +141,16 @@ func (c *Client) candidateURLs(paths ...string) []string {
 	candidates := make([]string, 0, len(paths))
 	seen := map[string]struct{}{}
 
-	add := func(p string) {
-		endpoint, err := c.joinURL(p)
+	base, err := url.Parse(c.BaseURL)
+	basePath := ""
+	if err == nil {
+		basePath = strings.Trim(path.Clean(base.Path), "/")
+		if basePath == "." {
+			basePath = ""
+		}
+	}
+
+	add := func(endpoint string, err error) {
 		if err != nil {
 			return
 		}
@@ -146,23 +162,27 @@ func (c *Client) candidateURLs(paths ...string) []string {
 	}
 
 	for _, p := range paths {
-		add(p)
+		cleanPath := strings.TrimLeft(p, "/")
+		if basePath == "" || !strings.HasPrefix(cleanPath, basePath+"/") {
+			add(c.joinURL(p))
+		}
+		add(c.joinRootURL(p))
 	}
 
 	return candidates
 }
 
 func (c *Client) DetectInboundEndpoint(ctx context.Context) (string, []InboundRecord, error) {
-	var lastErr error
+	var errs []error
 	for _, endpoint := range c.inboundListCandidates() {
 		rows, detected, err := c.listInboundsAt(ctx, endpoint)
 		if err == nil {
 			return detected, rows, nil
 		}
-		lastErr = err
+		errs = append(errs, err)
 	}
-	if lastErr != nil {
-		return "", nil, lastErr
+	if len(errs) > 0 {
+		return "", nil, errors.Join(errs...)
 	}
 	return "", nil, fmt.Errorf("xui list inbounds returned no candidates")
 }
@@ -234,7 +254,7 @@ func (c *Client) listClientsAt(ctx context.Context, endpoint string) ([]ClientLi
 }
 
 func (c *Client) AddInbound(ctx context.Context, inbound InboundRecord) error {
-	body, err := inboundJSONBody(inbound)
+	body, err := inboundJSONBody(inbound, false)
 	if err != nil {
 		return err
 	}
@@ -242,7 +262,15 @@ func (c *Client) AddInbound(ctx context.Context, inbound InboundRecord) error {
 }
 
 func (c *Client) UpdateInbound(ctx context.Context, inboundID int, inbound InboundRecord) error {
-	body, err := inboundJSONBody(inbound)
+	body, err := inboundJSONBody(inbound, false)
+	if err != nil {
+		return err
+	}
+	return c.postJSONCandidates(ctx, c.inboundActionCandidates("update/"+strconv.Itoa(inboundID)), body, "update inbound")
+}
+
+func (c *Client) UpdateInboundWithClients(ctx context.Context, inboundID int, inbound InboundRecord) error {
+	body, err := inboundJSONBody(inbound, true)
 	if err != nil {
 		return err
 	}
@@ -416,7 +444,11 @@ type inboundBody struct {
 	TrafficReset   string `json:"trafficReset"`
 }
 
-func inboundJSONBody(inbound InboundRecord) (string, error) {
+func inboundJSONBody(inbound InboundRecord, includeClients bool) (string, error) {
+	settingsRaw := inbound.Settings
+	if !includeClients {
+		settingsRaw = stripInboundClients(settingsRaw)
+	}
 	body := inboundBody{
 		Total:          inbound.Total,
 		Remark:         inbound.Remark,
@@ -425,7 +457,7 @@ func inboundJSONBody(inbound InboundRecord) (string, error) {
 		Listen:         inbound.Listen,
 		Port:           inbound.Port,
 		Protocol:       inbound.Protocol,
-		Settings:       rawJSONValue(stripInboundClients(inbound.Settings), map[string]any{}),
+		Settings:       rawJSONValue(settingsRaw, map[string]any{}),
 		StreamSettings: rawJSONValue(inbound.StreamSettings, map[string]any{}),
 		Tag:            inbound.Tag,
 		Sniffing:       rawJSONValue(inbound.Sniffing, map[string]any{}),

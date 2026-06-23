@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 8
+const schemaVersion = 10
 
 type Store struct {
 	DB *sql.DB
@@ -71,6 +71,8 @@ func (s *Store) migrate() error {
 		{version: 6, run: s.migrateV6},
 		{version: 7, run: s.migrateV7},
 		{version: 8, run: s.migrateV8},
+		{version: 9, run: s.migrateV9},
+		{version: 10, run: s.migrateV10},
 	}
 
 	for _, migration := range migrations {
@@ -85,6 +87,28 @@ func (s *Store) migrate() error {
 	}
 
 	return nil
+}
+
+func (s *Store) migrateV10() error {
+	if _, err := s.DB.Exec(`ALTER TABLE nodes ADD COLUMN flow TEXT DEFAULT ''`); err != nil {
+		// Older dev databases may already have the column while schema_version lags.
+	}
+	_, err := s.DB.Exec("INSERT INTO schema_version (version, applied_at) VALUES (10, ?)", time.Now().Unix())
+	return err
+}
+
+func (s *Store) migrateV9() error {
+	statements := []string{
+		`ALTER TABLE nodes ADD COLUMN protocol TEXT DEFAULT 'vless'`,
+		`ALTER TABLE nodes ADD COLUMN network TEXT DEFAULT 'raw'`,
+	}
+	for _, stmt := range statements {
+		if _, err := s.DB.Exec(stmt); err != nil {
+			continue
+		}
+	}
+	_, err := s.DB.Exec("INSERT INTO schema_version (version, applied_at) VALUES (9, ?)", time.Now().Unix())
+	return err
 }
 
 func (s *Store) migrateV8() error {

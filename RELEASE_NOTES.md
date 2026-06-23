@@ -1,3 +1,12 @@
+# v1.3.11
+
+## 主要更新
+
+- 节点设置新增协议、网络类型和流控 flow，用于明确选择订阅生成时匹配的 3x-ui inbound 模板，并支持自定义 flow 参数。
+- 修复 xhttp 节点可能错误套用 raw/reality 模板的问题，非 Reality xhttp 不再输出 `reality-opts`。
+- 代理分组新建时不再自动填充 URL 和间隔，只有用户分组模式需要健康检查时才自动使用默认值。
+- 完善 vmess、trojan、shadowsocks 等协议的基础订阅字段生成。
+
 # v1.3.10
 
 ## 主要更新

@@ -17,7 +17,7 @@ import (
 	"subforme/backend/internal/xui"
 )
 
-const trafficRefreshRequestTimeout = 5 * time.Second
+const trafficRefreshRequestTimeout = 30 * time.Second
 
 type XUIResolver interface {
 	ResolveUserNodes(ctx context.Context, query string) ([]xui.Node, error)
@@ -247,6 +247,9 @@ func (s Service) loadManagedNodes() []config.ManagedNode {
 					Name:     n.Name,
 					Address:  n.Address,
 					Port:     n.Port,
+					Protocol: n.Protocol,
+					Network:  n.Network,
+					Flow:     n.Flow,
 					ServerID: n.ServerID,
 				}
 			}
@@ -343,7 +346,16 @@ func (s Service) ReadManagedNodes() ([]config.ManagedNode, error) {
 		if err == nil {
 			out := make([]config.ManagedNode, len(dbNodes))
 			for i, n := range dbNodes {
-				out[i] = config.ManagedNode{ID: n.NodeID, Name: n.Name, Address: n.Address, Port: n.Port, ServerID: n.ServerID}
+				out[i] = config.ManagedNode{
+					ID:       n.NodeID,
+					Name:     n.Name,
+					Address:  n.Address,
+					Port:     n.Port,
+					Protocol: n.Protocol,
+					Network:  n.Network,
+					Flow:     n.Flow,
+					ServerID: n.ServerID,
+				}
 			}
 			return out, nil
 		}
@@ -352,11 +364,21 @@ func (s Service) ReadManagedNodes() ([]config.ManagedNode, error) {
 }
 
 func (s Service) UpdateManagedNodes(next []config.ManagedNode) error {
+	next = normalizeManagedNodes(next)
 	if s.DB != nil {
 		dbNodes := make([]db.Node2, len(next))
 		validIDs := make([]string, 0, len(next))
 		for i, n := range next {
-			dbNodes[i] = db.Node2{NodeID: n.ID, Name: n.Name, Address: n.Address, Port: n.Port, ServerID: n.ServerID}
+			dbNodes[i] = db.Node2{
+				NodeID:   n.ID,
+				Name:     n.Name,
+				Address:  n.Address,
+				Port:     n.Port,
+				Protocol: normalizeManagedProtocol(n.Protocol),
+				Network:  normalizeManagedNetwork(n.Network),
+				Flow:     normalizeManagedFlow(n.Flow),
+				ServerID: n.ServerID,
+			}
 			validIDs = append(validIDs, n.ID)
 		}
 		if err := s.DB.ReplaceNodes(dbNodes); err != nil {
@@ -365,6 +387,17 @@ func (s Service) UpdateManagedNodes(next []config.ManagedNode) error {
 		return s.DB.CleanupNodePrefs(validIDs)
 	}
 	return config.SaveManagedNodes(s.ConfigDir, next)
+}
+
+func normalizeManagedNodes(nodes []config.ManagedNode) []config.ManagedNode {
+	out := make([]config.ManagedNode, len(nodes))
+	for i, n := range nodes {
+		n.Protocol = normalizeManagedProtocol(n.Protocol)
+		n.Network = normalizeManagedNetwork(n.Network)
+		n.Flow = normalizeManagedFlow(n.Flow)
+		out[i] = n
+	}
+	return out
 }
 
 func (s Service) ReadProviders() ([]config.ProviderAddon, error) {
@@ -684,10 +717,10 @@ func applyManagedNodes(templateNodes []xui.Node, managedNodes []config.ManagedNo
 		if _, ok := selectedSet[managed.ID]; !ok {
 			continue
 		}
-		if len(templateNodes) == 0 {
+		proxy, ok := managedTemplateNode(templateNodes, managed)
+		if !ok {
 			continue
 		}
-		proxy := templateNodes[0]
 		proxy.Name = managed.Name
 		proxy.Server = managed.Address
 		if managed.Port > 0 {
@@ -701,6 +734,76 @@ func applyManagedNodes(templateNodes []xui.Node, managedNodes []config.ManagedNo
 		return expanded
 	}
 	return templateNodes
+}
+
+func managedTemplateNode(templateNodes []xui.Node, managed config.ManagedNode) (xui.Node, bool) {
+	protocol := normalizeManagedProtocol(managed.Protocol)
+	network := normalizeManagedNetwork(managed.Network)
+
+	if node, ok := findTemplateNode(templateNodes, managed.ServerID, protocol, network, true, true); ok {
+		return adaptTemplateNodeToManaged(node, managed), true
+	}
+	if node, ok := findTemplateNode(templateNodes, managed.ServerID, protocol, network, false, true); ok {
+		return adaptTemplateNodeToManaged(node, managed), true
+	}
+	if node, ok := findTemplateNode(templateNodes, managed.ServerID, protocol, network, true, false); ok {
+		return adaptTemplateNodeToManaged(node, managed), true
+	}
+	if node, ok := findTemplateNode(templateNodes, managed.ServerID, protocol, network, false, false); ok {
+		return adaptTemplateNodeToManaged(node, managed), true
+	}
+	return xui.Node{}, false
+}
+
+func findTemplateNode(templateNodes []xui.Node, serverID int64, protocol, network string, requireServer, requireNetwork bool) (xui.Node, bool) {
+	for _, node := range templateNodes {
+		if protocol != "" && node.Type != "" && node.Type != protocol {
+			continue
+		}
+		if requireServer && serverID > 0 && node.ServerID > 0 && node.ServerID != serverID {
+			continue
+		}
+		if requireNetwork && network != "" && normalizeManagedNetwork(node.Network) != network {
+			continue
+		}
+		return node, true
+	}
+	return xui.Node{}, false
+}
+
+func adaptTemplateNodeToManaged(node xui.Node, managed config.ManagedNode) xui.Node {
+	network := normalizeManagedNetwork(managed.Network)
+	if network == "" {
+		return normalizeNodeTemplate(node)
+	}
+	if normalizeManagedNetwork(node.Network) == network {
+		node.Network = network
+		return normalizeNodeTemplate(node)
+	}
+	node.Network = network
+	return normalizeNodeTemplate(node)
+}
+
+func normalizeManagedProtocol(protocol string) string {
+	switch strings.ToLower(strings.TrimSpace(protocol)) {
+	case "":
+		return "vless"
+	default:
+		return strings.ToLower(strings.TrimSpace(protocol))
+	}
+}
+
+func normalizeManagedNetwork(network string) string {
+	switch strings.ToLower(strings.TrimSpace(network)) {
+	case "", "tcp":
+		return "raw"
+	default:
+		return strings.ToLower(strings.TrimSpace(network))
+	}
+}
+
+func normalizeManagedFlow(flow string) string {
+	return strings.TrimSpace(flow)
 }
 
 // ─── Traffic ────────────────────────────────────────────────────────
@@ -743,7 +846,7 @@ func (s Service) refreshTrafficForServer(ctx context.Context, sv db.Server) ([]d
 	cli := xui.NewClient(s.xuiURL(&sv), sv.APIKey, "", "")
 	clients, err := cli.ListClients(requestCtx)
 	if err != nil {
-		return nil, fmt.Errorf("refresh timeout_or_fetch_error after %s: %w", time.Since(start).Round(time.Millisecond), err)
+		return nil, fmt.Errorf("list clients for traffic refresh after %s: %w", time.Since(start).Round(time.Millisecond), err)
 	}
 
 	entries := make([]db.UserTraffic, 0, len(clients))
@@ -1115,6 +1218,12 @@ func applyImportedClient(user *db.User, client xui.InboundClient) bool {
 			changed = true
 		}
 	}
+	setStringIfNonEmpty := func(target *string, value string) {
+		if strings.TrimSpace(value) == "" {
+			return
+		}
+		setString(target, value)
+	}
 	setInt := func(target *int, value int) {
 		if *target != value {
 			*target = value
@@ -1131,8 +1240,8 @@ func applyImportedClient(user *db.User, client xui.InboundClient) bool {
 	setString(&user.UUID, client.ID)
 	setString(&user.Password, client.Password)
 	setString(&user.Auth, client.Auth)
-	setString(&user.Flow, client.Flow)
-	setString(&user.Security, client.Security)
+	setStringIfNonEmpty(&user.Flow, client.Flow)
+	setStringIfNonEmpty(&user.Security, client.Security)
 	setInt64(&user.TotalGB, client.TotalGB)
 	setInt64(&user.ExpiryTime, client.ExpiryTime)
 	setInt(&user.LimitIP, client.LimitIP)
@@ -1190,6 +1299,7 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 	}
 	desiredByEmail := desiredInboundTagsByEmail(mainAssignments, mainByLocalID)
 	localByEmail := usersByEmail(users)
+	desiredClientsByTag := desiredInboundClientsByTag(mainInbounds, desiredByEmail)
 
 	for _, sv := range servers {
 		if sv.IsMain || !sv.Enabled {
@@ -1211,81 +1321,15 @@ func (s Service) SyncToServers(ctx context.Context) (*SyncResult, error) {
 			result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: err.Error()})
 			continue
 		}
-
-		existingClients, existingAttachments, err := s.collectServerClients(ctx, cli, syncedInbounds)
+		syncedUsers, updatedInbounds, deletedClients, err := syncServerInboundClients(ctx, cli, syncedInbounds, desiredClientsByTag)
 		if err != nil {
-			log.Printf("[sync] list clients for %s failed, falling back to inbound clients: %v", sv.Name, err)
+			log.Printf("[sync] sync inbound clients for %s: %v", sv.Name, err)
+			result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: err.Error()})
+			continue
 		}
-		log.Printf("[sync] %s: %d existing users", sv.Name, len(existingClients))
-		targetByTag := dbInboundsByTag(syncedInbounds)
-
-		for _, u := range users {
-			tags := desiredByEmail[u.Email]
-			if len(tags) == 0 {
-				continue
-			}
-			desiredInboundIDs := inboundIDsForTags(tags, targetByTag)
-			if len(desiredInboundIDs) == 0 {
-				log.Printf("[sync] %s: no matching target inbounds for %s", sv.Name, u.Email)
-				continue
-			}
-			protocol := protocolForFirstTag(tags, targetByTag)
-			client := buildXUIClient(protocol, u)
-			if existing, ok := existingClients[u.Email]; ok {
-				client.Enable = existing.Enable
-				if !sameRemoteClient(existing, client) {
-					if err := cli.UpdateClientByEmail(ctx, u.Email, client); err != nil {
-						result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("update %s: %v", u.Email, err)})
-						continue
-					}
-					result.Updated++
-				}
-				add, remove := diffInboundAttachments(existingAttachments[u.Email], desiredInboundIDs)
-				if err := cli.AttachClient(ctx, u.Email, add); err != nil {
-					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("attach %s: %v", u.Email, err)})
-					continue
-				}
-				result.Attached += len(add)
-				if err := cli.DetachClient(ctx, u.Email, remove); err != nil {
-					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("detach %s: %v", u.Email, err)})
-					continue
-				}
-				result.Detached += len(remove)
-			} else if err := cli.CreateClient(ctx, client, desiredInboundIDs); err != nil {
-				if !isEmailAlreadyInUse(err) {
-					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("create %s: %v", u.Email, err)})
-					continue
-				}
-				log.Printf("[sync] %s already exists on %s, updating and attaching", u.Email, sv.Name)
-				if err := cli.UpdateClientByEmail(ctx, u.Email, client); err != nil {
-					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("update existing %s: %v", u.Email, err)})
-					continue
-				}
-				result.Updated++
-				if err := cli.AttachClient(ctx, u.Email, desiredInboundIDs); err != nil {
-					result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("attach existing %s: %v", u.Email, err)})
-					continue
-				}
-				result.Attached += len(desiredInboundIDs)
-			} else {
-				result.Added++
-			}
-			result.Synced++
-		}
-
-		for email := range existingClients {
-			if _, ok := localByEmail[email]; ok {
-				if len(desiredByEmail[email]) > 0 {
-					continue
-				}
-			}
-			log.Printf("[sync] deleting %s from %s", email, sv.Name)
-			if err := cli.DeleteClientByEmailV2(ctx, email); err != nil {
-				result.ServerErrors = append(result.ServerErrors, ServerError{Server: sv.Name, Error: fmt.Sprintf("delete %s: %v", email, err)})
-				continue
-			}
-			result.Deleted++
-		}
+		result.Synced += syncedUsers
+		result.Updated += updatedInbounds
+		result.Deleted += deletedClients
 
 		refetched, err := cli.ListInbounds(ctx)
 		if err == nil {
@@ -1394,6 +1438,24 @@ func inboundRecordSyncKey(inb xui.InboundRecord) string {
 		return strings.TrimSpace(inb.Tag)
 	}
 	return fmt.Sprintf("%s|%s|%d|%s", inb.Protocol, inb.Listen, inb.Port, inb.Remark)
+}
+
+func inboundPortKey(listen string, port int) string {
+	return fmt.Sprintf("%s|%d", strings.TrimSpace(listen), port)
+}
+
+func dbInboundPortKey(inb db.Inbound) string {
+	if inb.Port <= 0 {
+		return ""
+	}
+	return inboundPortKey(inb.Listen, inb.Port)
+}
+
+func recordInboundPortKey(inb xui.InboundRecord) string {
+	if inb.Port <= 0 {
+		return ""
+	}
+	return inboundPortKey(inb.Listen, inb.Port)
 }
 
 func appendUniqueString(list []string, value string) []string {
@@ -1583,7 +1645,8 @@ func inboundEquivalent(a db.Inbound, b xui.InboundRecord) bool {
 		a.TrafficReset == b.TrafficReset &&
 		settingsWithoutClients(a.SettingsJSON) == settingsWithoutClients(b.Settings) &&
 		a.StreamSettingsJSON == b.StreamSettings &&
-		a.SniffingJSON == b.Sniffing
+		a.SniffingJSON == b.Sniffing &&
+		a.Tag == b.Tag
 }
 
 func settingsWithoutClients(raw string) string {
@@ -1603,13 +1666,19 @@ func settingsWithoutClients(raw string) string {
 
 func (s Service) syncServerInbounds(ctx context.Context, cli *xui.Client, sv db.Server, mainInbounds []db.Inbound, remote []xui.InboundRecord) ([]db.Inbound, error) {
 	remoteByKey := map[string]xui.InboundRecord{}
+	remoteByPort := map[string]xui.InboundRecord{}
 	for _, inb := range remote {
 		key := inboundRecordSyncKey(inb)
 		if key != "" {
 			remoteByKey[key] = inb
 		}
+		portKey := recordInboundPortKey(inb)
+		if portKey != "" {
+			remoteByPort[portKey] = inb
+		}
 	}
 	mainKeys := map[string]bool{}
+	usedRemoteIDs := map[int64]bool{}
 	for _, main := range mainInbounds {
 		key := inboundSyncKey(main)
 		if key == "" {
@@ -1617,6 +1686,11 @@ func (s Service) syncServerInbounds(ctx context.Context, cli *xui.Client, sv db.
 		}
 		mainKeys[key] = true
 		remoteInb, ok := remoteByKey[key]
+		if !ok {
+			if portKey := dbInboundPortKey(main); portKey != "" {
+				remoteInb, ok = remoteByPort[portKey]
+			}
+		}
 		record := dbInboundToXUI(main)
 		if !ok {
 			log.Printf("[sync] %s: creating inbound %s", sv.Name, main.Remark)
@@ -1625,6 +1699,7 @@ func (s Service) syncServerInbounds(ctx context.Context, cli *xui.Client, sv db.
 			}
 			continue
 		}
+		usedRemoteIDs[remoteInb.ID] = true
 		if !inboundEquivalent(main, remoteInb) {
 			log.Printf("[sync] %s: updating inbound %s", sv.Name, main.Remark)
 			if err := cli.UpdateInbound(ctx, int(remoteInb.ID), record); err != nil {
@@ -1634,6 +1709,9 @@ func (s Service) syncServerInbounds(ctx context.Context, cli *xui.Client, sv db.
 	}
 	for key, remoteInb := range remoteByKey {
 		if mainKeys[key] {
+			continue
+		}
+		if usedRemoteIDs[remoteInb.ID] {
 			continue
 		}
 		log.Printf("[sync] %s: deleting stale inbound %s", sv.Name, remoteInb.Remark)
@@ -1683,6 +1761,86 @@ func (s Service) rebuildAssignmentsFromRemote(serverID int64, inbounds []xui.Inb
 	return nil
 }
 
+func desiredInboundClientsByTag(mainInbounds []db.Inbound, desiredByEmail map[string][]string) map[string][]xui.InboundClient {
+	out := make(map[string][]xui.InboundClient, len(mainInbounds))
+	for _, inb := range mainInbounds {
+		tag := inboundSyncKey(inb)
+		if tag == "" {
+			continue
+		}
+		settings, ok := xui.ParseInboundSettings(inb.SettingsJSON)
+		if !ok {
+			continue
+		}
+		clients := make([]xui.InboundClient, 0, len(settings.Clients))
+		for _, client := range settings.Clients {
+			if !sliceContains(desiredByEmail[client.Email], tag) {
+				continue
+			}
+			clients = append(clients, client)
+		}
+		out[tag] = clients
+	}
+	return out
+}
+
+func sliceContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func syncServerInboundClients(ctx context.Context, cli *xui.Client, remoteInbounds []db.Inbound, desiredByTag map[string][]xui.InboundClient) (int, int, int, error) {
+	syncedUsers := 0
+	updatedInbounds := 0
+	deletedClients := 0
+	for _, remoteInb := range remoteInbounds {
+		tag := inboundSyncKey(remoteInb)
+		currentClients := decodeInboundClientsFromSettings(remoteInb.SettingsJSON)
+		desiredClients := preserveRemoteClientEnable(desiredByTag[tag], currentClients)
+		if sameInboundClientList(currentClients, desiredClients) {
+			syncedUsers += len(desiredClients)
+			continue
+		}
+		record := dbInboundToXUI(remoteInb)
+		record.Settings = replaceClientsInSettings(remoteInb.SettingsJSON, desiredClients)
+		if err := cli.UpdateInboundWithClients(ctx, remoteInb.InboundID, record); err != nil {
+			return syncedUsers, updatedInbounds, deletedClients, fmt.Errorf("update inbound %s clients: %w", remoteInb.Remark, err)
+		}
+		updatedInbounds++
+		syncedUsers += len(desiredClients)
+		if len(currentClients) > len(desiredClients) {
+			deletedClients += len(currentClients) - len(desiredClients)
+		}
+	}
+	return syncedUsers, updatedInbounds, deletedClients, nil
+}
+
+func preserveRemoteClientEnable(desired, current []xui.InboundClient) []xui.InboundClient {
+	if len(desired) == 0 {
+		return desired
+	}
+	currentByEmail := make(map[string]xui.InboundClient, len(current))
+	for _, client := range current {
+		if client.Email == "" {
+			continue
+		}
+		currentByEmail[strings.ToLower(client.Email)] = client
+	}
+	out := make([]xui.InboundClient, len(desired))
+	for i, client := range desired {
+		next := client
+		if existing, ok := currentByEmail[strings.ToLower(client.Email)]; ok {
+			next.Enable = existing.Enable
+		}
+		out[i] = next
+	}
+	return out
+}
+
 func upsertClientInSettings(raw string, client xui.InboundClient) string {
 	settings := map[string]any{}
 	_ = json.Unmarshal([]byte(raw), &settings)
@@ -1697,6 +1855,18 @@ func upsertClientInSettings(raw string, client xui.InboundClient) string {
 	}
 	if !replaced {
 		clients = append(clients, client)
+	}
+	settings["clients"] = clients
+	if b, err := json.Marshal(settings); err == nil {
+		return string(b)
+	}
+	return raw
+}
+
+func replaceClientsInSettings(raw string, clients []xui.InboundClient) string {
+	settings := map[string]any{}
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return raw
 	}
 	settings["clients"] = clients
 	if b, err := json.Marshal(settings); err == nil {
@@ -1724,6 +1894,14 @@ func removeClientFromSettings(raw, email string) string {
 	return raw
 }
 
+func decodeInboundClientsFromSettings(raw string) []xui.InboundClient {
+	settings, ok := xui.ParseInboundSettings(raw)
+	if !ok {
+		return nil
+	}
+	return settings.Clients
+}
+
 func decodeInboundClients(raw any) []xui.InboundClient {
 	data, err := json.Marshal(raw)
 	if err != nil {
@@ -1745,6 +1923,21 @@ func sameClient(a, b xui.InboundClient) bool {
 		return true
 	}
 	return false
+}
+
+func sameInboundClientList(current, desired []xui.InboundClient) bool {
+	if len(current) != len(desired) {
+		return false
+	}
+	currentJSON, err := json.Marshal(current)
+	if err != nil {
+		return false
+	}
+	desiredJSON, err := json.Marshal(desired)
+	if err != nil {
+		return false
+	}
+	return string(currentJSON) == string(desiredJSON)
 }
 
 func (s Service) dbResolveUserNodes(email string) ([]xui.Node, error) {
@@ -1786,30 +1979,70 @@ func buildNodeFromCache(inb db.Inbound, u db.User, host string) xui.Node {
 	if server == "" {
 		server = inb.Remark
 	}
+	client := inboundClientForUser(inb.SettingsJSON, u.Email)
+	var realityPublicKey, realityShortID string
+	if stream.Security == "reality" {
+		realityPublicKey = stream.RealitySettings.Settings.PublicKey
+		realityShortID = firstOrEmpty(stream.RealitySettings.ShortIds)
+	}
+	uuid := u.UUID
+	password := u.Password
+	flow := u.Flow
+	security := u.Security
+	if client != nil {
+		if client.ID != "" {
+			uuid = client.ID
+		}
+		if client.Password != "" {
+			password = client.Password
+		}
+		if strings.TrimSpace(client.Flow) != "" {
+			flow = client.Flow
+		}
+		if strings.TrimSpace(client.Security) != "" {
+			security = client.Security
+		}
+	}
 	node := xui.Node{
 		ID:                fmt.Sprintf("%s|%s|%s|%d", inb.Protocol, inb.Remark, server, inb.Port),
 		Name:              inb.Remark,
 		Type:              inb.Protocol,
 		Server:            server,
 		Port:              inb.Port,
-		UUID:              u.UUID,
-		Password:          u.Password,
-		Flow:              u.Flow,
+		UUID:              uuid,
+		Password:          password,
+		Flow:              flow,
+		Security:          security,
 		Network:           normalizeNet(stream.Network),
 		TLS:               stream.Security == "tls" || stream.Security == "reality",
 		UDP:               inb.Protocol == "vless",
 		ServerName:        pickSNI(stream),
-		ClientFingerprint: firstNonEmpty(stream.RealitySettings.Settings.Fingerprint, stream.TLSSettings.Fingerprint),
-		RealityPublicKey:  stream.RealitySettings.Settings.PublicKey,
-		RealityShortID:    firstOrEmpty(stream.RealitySettings.ShortIds),
+		ClientFingerprint: pickClientFingerprintFromStream(stream),
+		RealityPublicKey:  realityPublicKey,
+		RealityShortID:    realityShortID,
 		XHTTPPath:         stream.XHTTPSettings.Path,
 		XHTTPHost:         stream.XHTTPSettings.Host,
 		XHTTPMode:         stream.XHTTPSettings.Mode,
+		ServerID:          inb.ServerID,
 	}
 	if stream.ALPN != nil {
 		node.ALPN = stream.ALPN
 	}
-	return node
+	return normalizeNodeTemplate(node)
+}
+
+func inboundClientForUser(settingsJSON, email string) *xui.InboundClient {
+	settings, ok := xui.ParseInboundSettings(settingsJSON)
+	if !ok {
+		return nil
+	}
+	for _, client := range settings.Clients {
+		if strings.EqualFold(client.Email, email) {
+			c := client
+			return &c
+		}
+	}
+	return nil
 }
 
 func pickHost(listen, fallback string) string {
@@ -1829,14 +2062,24 @@ func normalizeNet(network string) string {
 }
 
 func pickSNI(stream xui.InboundStreamSettings) string {
-	if stream.RealitySettings.Settings.ServerName != "" {
+	if stream.Security == "reality" && stream.RealitySettings.Settings.ServerName != "" {
 		return stream.RealitySettings.Settings.ServerName
 	}
-	if stream.TLSSettings.ServerName != "" {
+	if stream.Security == "tls" && stream.TLSSettings.ServerName != "" {
 		return stream.TLSSettings.ServerName
 	}
-	if len(stream.RealitySettings.ServerNames) > 0 {
+	if stream.Security == "reality" && len(stream.RealitySettings.ServerNames) > 0 {
 		return stream.RealitySettings.ServerNames[0]
+	}
+	return ""
+}
+
+func pickClientFingerprintFromStream(stream xui.InboundStreamSettings) string {
+	if stream.Security == "reality" {
+		return stream.RealitySettings.Settings.Fingerprint
+	}
+	if stream.Security == "tls" {
+		return stream.TLSSettings.Fingerprint
 	}
 	return ""
 }
@@ -1848,6 +2091,34 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func normalizeNodeTemplate(node xui.Node) xui.Node {
+	switch normalizeManagedProtocol(node.Type) {
+	case "vless":
+		switch normalizeManagedNetwork(node.Network) {
+		case "xhttp":
+			node.Network = "xhttp"
+			node.TLS = true
+			node.Flow = ""
+			node.RealityPublicKey = ""
+			node.RealityShortID = ""
+		default:
+			node.Network = normalizeManagedNetwork(node.Network)
+			node.XHTTPPath = ""
+			node.XHTTPHost = ""
+			node.XHTTPMode = ""
+		}
+	default:
+		node.Network = normalizeManagedNetwork(node.Network)
+		node.Flow = ""
+		node.RealityPublicKey = ""
+		node.RealityShortID = ""
+		node.XHTTPPath = ""
+		node.XHTTPHost = ""
+		node.XHTTPMode = ""
+	}
+	return node
 }
 
 func (s Service) DBGetUserTraffic(userID int64) []db.ServerTraffic {

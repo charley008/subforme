@@ -1,6 +1,6 @@
 package config
 
-const Version = "v1.3.10"
+const Version = "v1.4.0"
 
 type XUIConfig struct {
 	BaseURL  string `yaml:"base_url" json:"base_url"`
@@ -27,6 +27,9 @@ type ManagedNode struct {
 	Name     string `yaml:"name" json:"name"`
 	Address  string `yaml:"address" json:"address"`
 	Port     int    `yaml:"port,omitempty" json:"port,omitempty"`
+	Protocol string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+	Network  string `yaml:"network,omitempty" json:"network,omitempty"`
+	Flow     string `yaml:"flow,omitempty" json:"flow,omitempty"`
 	ServerID int64  `yaml:"server_id,omitempty" json:"server_id,omitempty"`
 }
 

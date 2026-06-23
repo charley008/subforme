@@ -59,6 +59,7 @@ rules:
 			Port:      443,
 			UUID:      "036898f6-8f62-46b2-9924-c1b884d6e75d",
 			Network:   "xhttp",
+			Flow:      "xtls-rprx-vision",
 			UDP:       true,
 			XHTTPPath: "/xhttp",
 			XHTTPMode: "auto",
@@ -83,6 +84,113 @@ rules:
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in yaml, got %s", want, got)
 		}
+	}
+	if strings.Contains(got, "flow:") {
+		t.Fatalf("xhttp node should not emit flow, got %s", got)
+	}
+	if strings.Contains(got, "reality-opts:") {
+		t.Fatalf("xhttp node should not emit reality opts, got %s", got)
+	}
+}
+
+func TestBuildFinalYAMLDoesNotEmitXHTTPOptsForNonXHTTPNodes(t *testing.T) {
+	template := `proxies: []
+proxy-groups: []
+rules:
+  - MATCH,DIRECT
+`
+
+	nodes := []xui.Node{
+		{
+			Name:             "hk",
+			Type:             "vless",
+			Server:           "hk.4738.org",
+			Port:             443,
+			UUID:             "036898f6-8f62-46b2-9924-c1b884d6e75d",
+			Network:          "raw",
+			TLS:              true,
+			RealityPublicKey: "pk-1",
+			RealityShortID:   "sid-1",
+		},
+	}
+
+	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "")
+	if err != nil {
+		t.Fatalf("BuildFinalYAML returned error: %v", err)
+	}
+
+	got := string(raw)
+	if strings.Contains(got, "xhttp-opts:") {
+		t.Fatalf("non-xhttp node should not contain xhttp opts, got %s", got)
+	}
+	if !strings.Contains(got, "reality-opts:") {
+		t.Fatalf("expected reality opts to remain for reality node, got %s", got)
+	}
+}
+
+func TestBuildFinalYAMLUsesProtocolCredentials(t *testing.T) {
+	template := `proxies: []
+proxy-groups: []
+rules:
+  - MATCH,DIRECT
+`
+
+	nodes := []xui.Node{
+		{Name: "vmess", Type: "vmess", Server: "vmess.example.com", Port: 443, UUID: "uuid-1", Security: "chacha20-poly1305"},
+		{Name: "trojan", Type: "trojan", Server: "trojan.example.com", Port: 443, Password: "pass-1"},
+		{Name: "ss", Type: "shadowsocks", Server: "ss.example.com", Port: 8388, Password: "pass-2"},
+	}
+
+	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "")
+	if err != nil {
+		t.Fatalf("BuildFinalYAML returned error: %v", err)
+	}
+
+	got := string(raw)
+	for _, want := range []string{
+		"type: vmess",
+		"uuid: uuid-1",
+		"cipher: chacha20-poly1305",
+		"type: trojan",
+		"password: pass-1",
+		"type: shadowsocks",
+		"password: pass-2",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("expected %q in yaml, got %s", want, got)
+		}
+	}
+}
+
+func TestBuildFinalYAMLEmitsFlow(t *testing.T) {
+	template := `proxies: []
+proxy-groups: []
+rules:
+  - MATCH,DIRECT
+`
+
+	nodes := []xui.Node{
+		{Name: "vision", Type: "vless", Server: "vision.example.com", Port: 443, UUID: "uuid-1", Network: "raw", TLS: true, Flow: "xtls-rprx-vision"},
+	}
+
+	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "")
+	if err != nil {
+		t.Fatalf("BuildFinalYAML returned error: %v", err)
+	}
+
+	if got := string(raw); !strings.Contains(got, "flow: xtls-rprx-vision") {
+		t.Fatalf("expected flow in yaml, got %s", got)
+	}
+}
+
+func TestBuildFinalYAMLCompactsBlankLinesBeforeComments(t *testing.T) {
+	raw := "rules:\n  - MATCH,DIRECT\n\n# comment\nproxies: []\n"
+	got := compactCommentSpacing(raw)
+	if strings.Contains(got, "\n\n# comment") {
+		t.Fatalf("expected blank line before comment to be compacted, got %s", got)
+	}
+	if !strings.Contains(got, "\n# comment") {
+		t.Fatalf("expected comment to be preserved, got %s", got)
 	}
 }
 

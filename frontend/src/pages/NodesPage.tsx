@@ -13,6 +13,9 @@ const emptyDraft: ManagedNode = {
   name: "",
   address: "",
   port: 443,
+  protocol: "vless",
+  network: "raw",
+  flow: "",
 };
 
 export function NodesPage() {
@@ -84,6 +87,9 @@ export function NodesPage() {
       name: draft.name.trim(),
       address: draft.address.trim(),
       port: draft.port || 443,
+      protocol: draft.protocol || "vless",
+      network: draft.network || "raw",
+      flow: draft.flow?.trim() || "",
       server_id: draft.server_id,
     };
     const nextNodes = editingID ? nodes.map((n) => (n.id === editingID ? nextNode : n)) : [...nodes, nextNode];
@@ -109,19 +115,25 @@ export function NodesPage() {
               <th>名称</th>
               <th>地址</th>
               <th>端口</th>
+              <th>协议</th>
+              <th>网络</th>
+              <th>流控</th>
               <th>所属服务器</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             {nodes.length === 0 ? (
-              <tr><td colSpan={5}><div className="empty-state">暂无节点，请添加。</div></td></tr>
+              <tr><td colSpan={8}><div className="empty-state">暂无节点，请添加。</div></td></tr>
             ) : null}
             {nodes.map((node) => (
               <tr key={node.id}>
                 <td><strong>{node.name}</strong></td>
                 <td style={{ fontFamily: "monospace" }}>{node.address}</td>
                 <td>{node.port || 443}</td>
+                <td>{node.protocol || "vless"}</td>
+                <td>{node.network || "raw"}</td>
+                <td>{node.flow || "-"}</td>
                 <td style={{ fontSize: 13, color: "#64748b" }}>{serverMap.get(node.server_id ?? 0) || "-"}</td>
                 <td>
                   <div className="btn-group">
@@ -155,6 +167,39 @@ export function NodesPage() {
           <div className="form-group">
             <label>端口</label>
             <input type="number" value={draft.port ? String(draft.port) : ""} placeholder="443" onChange={(e) => setDraft((c) => ({ ...c, port: Number(e.target.value) || 0 }))} />
+          </div>
+          <div className="form-group">
+            <label>协议</label>
+            <select value={draft.protocol || "vless"} onChange={(e) => setDraft((c) => ({ ...c, protocol: e.target.value }))}>
+              <option value="vless">vless</option>
+              <option value="vmess">vmess</option>
+              <option value="trojan">trojan</option>
+              <option value="shadowsocks">shadowsocks</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>网络类型</label>
+            <select value={draft.network || "raw"} onChange={(e) => setDraft((c) => ({ ...c, network: e.target.value }))}>
+              <option value="raw">tcp/raw</option>
+              <option value="ws">ws</option>
+              <option value="grpc">grpc</option>
+              <option value="h2">h2</option>
+              <option value="http">http</option>
+              <option value="xhttp">xhttp</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label>流控</label>
+            <input
+              list="flow-options"
+              value={draft.flow || ""}
+              onChange={(e) => setDraft((c) => ({ ...c, flow: e.target.value }))}
+              placeholder="留空"
+            />
+            <datalist id="flow-options">
+              <option value="xtls-rprx-vision" />
+              <option value="xtls-rprx-direct" />
+            </datalist>
           </div>
           <div className="form-group">
             <label>所属服务器</label>

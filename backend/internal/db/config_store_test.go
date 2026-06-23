@@ -98,3 +98,30 @@ func TestSaveGroupsConfigPreservesProviderGroups(t *testing.T) {
 		t.Fatalf("expected provider group to be preserved, got %+v", groups.Groups)
 	}
 }
+
+func TestSaveGroupsConfigClearsHealthcheckFieldsForNormalGroups(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SaveGroupsConfigToDB(config.GroupConfig{
+		Groups: []config.GroupDef{{
+			Name:     "PROXY",
+			Type:     "select",
+			URL:      "https://www.gstatic.com/generate_204",
+			Interval: 300,
+		}},
+	}); err != nil {
+		t.Fatalf("save groups: %v", err)
+	}
+
+	groups, _, err := store.LoadGroupsConfigFromDB()
+	if err != nil {
+		t.Fatalf("load groups: %v", err)
+	}
+	if len(groups.Groups) != 1 || groups.Groups[0].URL != "" || groups.Groups[0].Interval != 0 {
+		t.Fatalf("expected normal group healthcheck fields to be cleared, got %+v", groups.Groups)
+	}
+}

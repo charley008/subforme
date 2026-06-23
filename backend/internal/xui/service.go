@@ -293,6 +293,11 @@ func collectNodes(inbounds []InboundRecord, host string, include func(client Inb
 			if !client.Enable || !include(client, inbound) {
 				continue
 			}
+			var realityPublicKey, realityShortID string
+			if stream.Security == "reality" {
+				realityPublicKey = stream.RealitySettings.Settings.PublicKey
+				realityShortID = firstOrEmpty(stream.RealitySettings.ShortIds)
+			}
 			nodes = append(nodes, Node{
 				ID:                buildNodeID(inbound.Protocol, inbound.Remark, pickServerHost(inbound.Listen, host), inbound.Port),
 				Name:              firstNonEmpty(inbound.Remark, client.Email, inbound.Protocol),
@@ -302,15 +307,16 @@ func collectNodes(inbounds []InboundRecord, host string, include func(client Inb
 				UUID:              client.ID,
 				Password:          client.Password,
 				Flow:              client.Flow,
+				Security:          client.Security,
 				Network:           normalizeNetwork(stream.Network, stream.TCPSettings.Header.Type),
 				TLS:               stream.Security == "tls" || stream.Security == "reality",
 				UDP:               inbound.Protocol == "vless",
 				ALPN:              pickALPN(stream),
 				Encryption:        pickEncryption(inbound.Protocol, stream),
 				ServerName:        pickServerName(stream),
-				ClientFingerprint: firstNonEmpty(stream.RealitySettings.Settings.Fingerprint, stream.TLSSettings.Fingerprint),
-				RealityPublicKey:  stream.RealitySettings.Settings.PublicKey,
-				RealityShortID:    firstOrEmpty(stream.RealitySettings.ShortIds),
+				ClientFingerprint: pickClientFingerprint(stream),
+				RealityPublicKey:  realityPublicKey,
+				RealityShortID:    realityShortID,
 				XHTTPPath:         stream.XHTTPSettings.Path,
 				XHTTPHost:         stream.XHTTPSettings.Host,
 				XHTTPMode:         stream.XHTTPSettings.Mode,
@@ -325,14 +331,24 @@ func buildNodeID(protocol, remark, server string, port int) string {
 }
 
 func pickServerName(stream InboundStreamSettings) string {
-	if stream.RealitySettings.Settings.ServerName != "" {
+	if stream.Security == "reality" && stream.RealitySettings.Settings.ServerName != "" {
 		return stream.RealitySettings.Settings.ServerName
 	}
-	if stream.TLSSettings.ServerName != "" {
+	if stream.Security == "tls" && stream.TLSSettings.ServerName != "" {
 		return stream.TLSSettings.ServerName
 	}
-	if len(stream.RealitySettings.ServerNames) > 0 {
+	if stream.Security == "reality" && len(stream.RealitySettings.ServerNames) > 0 {
 		return stream.RealitySettings.ServerNames[0]
+	}
+	return ""
+}
+
+func pickClientFingerprint(stream InboundStreamSettings) string {
+	if stream.Security == "reality" {
+		return stream.RealitySettings.Settings.Fingerprint
+	}
+	if stream.Security == "tls" {
+		return stream.TLSSettings.Fingerprint
 	}
 	return ""
 }

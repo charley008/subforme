@@ -157,6 +157,7 @@ func (s *Store) SaveGroupsConfigToDB(cfg config.GroupConfig) error {
 		return err
 	}
 	for i, g := range cfg.Groups {
+		g = normalizeProxyGroupForStorage(g)
 		if _, err := tx.Exec(`
 			INSERT INTO proxy_groups (name, type, url, interval, provider, sort_order)
 			VALUES (?, ?, ?, ?, ?, ?)
@@ -213,9 +214,18 @@ func (s *Store) LoadGroupsConfigFromDB() (config.GroupConfig, bool, error) {
 		if err := rows.Scan(&g.Name, &g.Type, &g.URL, &g.Interval, &g.Provider); err != nil {
 			return config.GroupConfig{}, false, err
 		}
+		g = normalizeProxyGroupForStorage(g)
 		cfg.Groups = append(cfg.Groups, g)
 	}
 	return cfg, true, rows.Err()
+}
+
+func normalizeProxyGroupForStorage(g config.GroupDef) config.GroupDef {
+	if g.Provider == "" {
+		g.URL = ""
+		g.Interval = 0
+	}
+	return g
 }
 
 func (s *Store) SaveProvidersToDB(providers []config.ProviderAddon) error {

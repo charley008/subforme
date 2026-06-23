@@ -22,6 +22,7 @@ type Node struct {
 	UUID              string   `json:"uuid"`
 	Password          string   `json:"password,omitempty"`
 	Flow              string   `json:"flow,omitempty"`
+	Security          string   `json:"security,omitempty"`
 	Network           string   `json:"network,omitempty"`
 	TLS               bool     `json:"tls"`
 	UDP               bool     `json:"udp"`
@@ -34,6 +35,7 @@ type Node struct {
 	XHTTPPath         string   `json:"xhttp_path,omitempty"`
 	XHTTPHost         string   `json:"xhttp_host,omitempty"`
 	XHTTPMode         string   `json:"xhttp_mode,omitempty"`
+	ServerID          int64    `json:"server_id,omitempty"`
 }
 
 type AvailableNode struct {

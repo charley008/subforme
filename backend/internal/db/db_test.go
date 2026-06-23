@@ -27,6 +27,34 @@ func TestOpenAppliesLatestSchemaVersion(t *testing.T) {
 	}
 }
 
+func TestReplaceNodesPersistsProtocolAndNetwork(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.ReplaceNodes([]Node2{{
+		NodeID:   "hk-xhttp",
+		Name:     "hk-xhttp",
+		Address:  "www.4738.org",
+		Port:     443,
+		Protocol: "vless",
+		Network:  "xhttp",
+		Flow:     "xtls-rprx-vision",
+	}}); err != nil {
+		t.Fatalf("ReplaceNodes returned error: %v", err)
+	}
+
+	nodes, err := store.ListNodeDB()
+	if err != nil {
+		t.Fatalf("ListNodeDB returned error: %v", err)
+	}
+	if len(nodes) != 1 || nodes[0].Protocol != "vless" || nodes[0].Network != "xhttp" || nodes[0].Flow != "xtls-rprx-vision" {
+		t.Fatalf("unexpected nodes: %#v", nodes)
+	}
+}
+
 func TestUpdateUserPreservesSubscriptionPrefs(t *testing.T) {
 	store, err := Open(t.TempDir())
 	if err != nil {

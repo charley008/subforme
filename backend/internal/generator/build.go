@@ -1,6 +1,8 @@
 package generator
 
 import (
+	"strings"
+
 	"subforme/backend/internal/config"
 	"subforme/backend/internal/groups"
 	"subforme/backend/internal/xui"
@@ -24,52 +26,7 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 
 	proxies := make([]Proxy, 0, len(nodes))
 	for _, node := range nodes {
-		var encryption *string
-		isXHTTP := node.Network == "xhttp"
-		if isXHTTP {
-			empty := ""
-			encryption = &empty
-		}
-		alpn := node.ALPN
-		if isXHTTP && len(alpn) == 0 {
-			alpn = []string{"h2"}
-		}
-		tls := node.TLS
-		if isXHTTP {
-			tls = true
-		}
-		clientFingerprint := node.ClientFingerprint
-		if isXHTTP && clientFingerprint == "" {
-			clientFingerprint = "chrome"
-		}
-		xhttpPath := node.XHTTPPath
-		if isXHTTP && xhttpPath == "" {
-			xhttpPath = "/"
-		}
-		proxies = append(proxies, Proxy{
-			Name:              node.Name,
-			Type:              node.Type,
-			Server:            node.Server,
-			Port:              node.Port,
-			UUID:              node.UUID,
-			Flow:              node.Flow,
-			Network:           node.Network,
-			TLS:               tls,
-			UDP:               node.UDP,
-			ALPN:              alpn,
-			ServerName:        node.ServerName,
-			ClientFingerprint: clientFingerprint,
-			Encryption:        encryption,
-			RealityOpts: RealityOpts{
-				PublicKey: node.RealityPublicKey,
-				ShortID:   node.RealityShortID,
-			},
-			XHTTPOpts: XHTTPOpts{
-				Path: xhttpPath,
-				Host: node.XHTTPHost,
-				Mode: normalizeXHTTPMode(node.XHTTPMode),
-			},
-		})
+		proxies = append(proxies, buildProxy(node))
 	}
 
 	selectedSet := map[string]config.ProviderAddon{}
@@ -125,7 +82,81 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 		}
 	}
 
-	return yamlx.Marshal(doc)
+	raw, err := yamlx.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(compactCommentSpacing(string(raw))), nil
+}
+
+func buildProxy(node xui.Node) Proxy {
+	isXHTTP := node.Network == "xhttp"
+	proxy := Proxy{
+		Name:    node.Name,
+		Type:    node.Type,
+		Server:  node.Server,
+		Port:    node.Port,
+		Network: node.Network,
+		TLS:     node.TLS,
+		UDP:     node.UDP,
+		ALPN:    node.ALPN,
+		ServerName:        node.ServerName,
+		ClientFingerprint: node.ClientFingerprint,
+	}
+
+	switch node.Type {
+	case "vless", "vmess":
+		proxy.UUID = node.UUID
+	case "trojan", "shadowsocks":
+		proxy.Password = node.Password
+	}
+
+	switch node.Type {
+	case "vless":
+		applyVLESSTemplate(&proxy, node, isXHTTP)
+	case "vmess":
+		cipher := node.Security
+		if cipher == "" {
+			cipher = "auto"
+		}
+		proxy.Cipher = cipher
+	case "trojan", "shadowsocks":
+		// protocol-specific credential already applied above
+	}
+
+	return proxy
+}
+
+func applyVLESSTemplate(proxy *Proxy, node xui.Node, isXHTTP bool) {
+	if isXHTTP {
+		empty := ""
+		proxy.Encryption = &empty
+		proxy.TLS = true
+		if len(proxy.ALPN) == 0 {
+			proxy.ALPN = []string{"h2"}
+		}
+		if proxy.ClientFingerprint == "" {
+			proxy.ClientFingerprint = "chrome"
+		}
+		path := node.XHTTPPath
+		if path == "" {
+			path = "/"
+		}
+		proxy.XHTTPOpts = &XHTTPOpts{
+			Path: path,
+			Host: node.XHTTPHost,
+			Mode: normalizeXHTTPMode(node.XHTTPMode),
+		}
+		return
+	}
+
+	proxy.Flow = node.Flow
+	if node.RealityPublicKey != "" || node.RealityShortID != "" {
+		proxy.RealityOpts = &RealityOpts{
+			PublicKey: node.RealityPublicKey,
+			ShortID:   node.RealityShortID,
+		}
+	}
 }
 
 func normalizeXHTTPMode(mode string) string {
@@ -135,6 +166,20 @@ func normalizeXHTTPMode(mode string) string {
 	default:
 		return mode
 	}
+}
+
+func compactCommentSpacing(raw string) string {
+	raw = strings.ReplaceAll(raw, "\r\n", "\n")
+	raw = strings.ReplaceAll(raw, "\r", "\n")
+	lines := strings.Split(raw, "\n")
+	out := make([]string, 0, len(lines))
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" && i+1 < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[i+1]), "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }
 
 func filterInvalidGroupRefs(entries []groupEntry, nodes []xui.Node) []groupEntry {
