@@ -243,14 +243,15 @@ func (s Service) loadManagedNodes() []config.ManagedNode {
 			out := make([]config.ManagedNode, len(dbNodes))
 			for i, n := range dbNodes {
 				out[i] = config.ManagedNode{
-					ID:       n.NodeID,
-					Name:     n.Name,
-					Address:  n.Address,
-					Port:     n.Port,
-					Protocol: n.Protocol,
-					Network:  n.Network,
-					Flow:     n.Flow,
-					ServerID: n.ServerID,
+					ID:         n.NodeID,
+					Name:       n.Name,
+					Address:    n.Address,
+					Port:       n.Port,
+					Protocol:   n.Protocol,
+					Network:    n.Network,
+					Flow:       n.Flow,
+					ServerName: n.ServerName,
+					ServerID:   n.ServerID,
 				}
 			}
 			return out
@@ -347,14 +348,15 @@ func (s Service) ReadManagedNodes() ([]config.ManagedNode, error) {
 			out := make([]config.ManagedNode, len(dbNodes))
 			for i, n := range dbNodes {
 				out[i] = config.ManagedNode{
-					ID:       n.NodeID,
-					Name:     n.Name,
-					Address:  n.Address,
-					Port:     n.Port,
-					Protocol: n.Protocol,
-					Network:  n.Network,
-					Flow:     n.Flow,
-					ServerID: n.ServerID,
+					ID:         n.NodeID,
+					Name:       n.Name,
+					Address:    n.Address,
+					Port:       n.Port,
+					Protocol:   n.Protocol,
+					Network:    n.Network,
+					Flow:       n.Flow,
+					ServerName: n.ServerName,
+					ServerID:   n.ServerID,
 				}
 			}
 			return out, nil
@@ -370,14 +372,15 @@ func (s Service) UpdateManagedNodes(next []config.ManagedNode) error {
 		validIDs := make([]string, 0, len(next))
 		for i, n := range next {
 			dbNodes[i] = db.Node2{
-				NodeID:   n.ID,
-				Name:     n.Name,
-				Address:  n.Address,
-				Port:     n.Port,
-				Protocol: normalizeManagedProtocol(n.Protocol),
-				Network:  normalizeManagedNetwork(n.Network),
-				Flow:     normalizeManagedFlow(n.Flow),
-				ServerID: n.ServerID,
+				NodeID:     n.ID,
+				Name:       n.Name,
+				Address:    n.Address,
+				Port:       n.Port,
+				Protocol:   normalizeManagedProtocol(n.Protocol),
+				Network:    normalizeManagedNetwork(n.Network),
+				Flow:       normalizeManagedFlow(n.Flow),
+				ServerName: normalizeManagedServerName(n.ServerName),
+				ServerID:   n.ServerID,
 			}
 			validIDs = append(validIDs, n.ID)
 		}
@@ -395,6 +398,7 @@ func normalizeManagedNodes(nodes []config.ManagedNode) []config.ManagedNode {
 		n.Protocol = normalizeManagedProtocol(n.Protocol)
 		n.Network = normalizeManagedNetwork(n.Network)
 		n.Flow = normalizeManagedFlow(n.Flow)
+		n.ServerName = normalizeManagedServerName(n.ServerName)
 		out[i] = n
 	}
 	return out
@@ -773,14 +777,12 @@ func findTemplateNode(templateNodes []xui.Node, serverID int64, protocol, networ
 
 func adaptTemplateNodeToManaged(node xui.Node, managed config.ManagedNode) xui.Node {
 	network := normalizeManagedNetwork(managed.Network)
-	if network == "" {
-		return normalizeNodeTemplate(node)
-	}
-	if normalizeManagedNetwork(node.Network) == network {
+	if network != "" {
 		node.Network = network
-		return normalizeNodeTemplate(node)
 	}
-	node.Network = network
+	if serverName := normalizeManagedServerName(managed.ServerName); serverName != "" {
+		node.ServerName = serverName
+	}
 	return normalizeNodeTemplate(node)
 }
 
@@ -804,6 +806,10 @@ func normalizeManagedNetwork(network string) string {
 
 func normalizeManagedFlow(flow string) string {
 	return strings.TrimSpace(flow)
+}
+
+func normalizeManagedServerName(serverName string) string {
+	return strings.TrimSpace(serverName)
 }
 
 // ─── Traffic ────────────────────────────────────────────────────────

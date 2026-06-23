@@ -49,15 +49,16 @@ type Inbound struct {
 
 // Node represents a managed proxy node.
 type Node2 struct {
-	ID       int64  `json:"-"`
-	NodeID   string `json:"id"`
-	Name     string `json:"name"`
-	Address  string `json:"address"`
-	Port     int    `json:"port"`
-	Protocol string `json:"protocol,omitempty"`
-	Network  string `json:"network,omitempty"`
-	Flow     string `json:"flow,omitempty"`
-	ServerID int64  `json:"server_id,omitempty"`
+	ID         int64  `json:"-"`
+	NodeID     string `json:"id"`
+	Name       string `json:"name"`
+	Address    string `json:"address"`
+	Port       int    `json:"port"`
+	Protocol   string `json:"protocol,omitempty"`
+	Network    string `json:"network,omitempty"`
+	Flow       string `json:"flow,omitempty"`
+	ServerName string `json:"server_name,omitempty"`
+	ServerID   int64  `json:"server_id,omitempty"`
 }
 
 // UserTraffic is a stored traffic record.

@@ -10,7 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 10
+const schemaVersion = 11
 
 type Store struct {
 	DB *sql.DB
@@ -73,6 +73,7 @@ func (s *Store) migrate() error {
 		{version: 8, run: s.migrateV8},
 		{version: 9, run: s.migrateV9},
 		{version: 10, run: s.migrateV10},
+		{version: 11, run: s.migrateV11},
 	}
 
 	for _, migration := range migrations {
@@ -87,6 +88,14 @@ func (s *Store) migrate() error {
 	}
 
 	return nil
+}
+
+func (s *Store) migrateV11() error {
+	if _, err := s.DB.Exec(`ALTER TABLE nodes ADD COLUMN server_name TEXT DEFAULT ''`); err != nil {
+		// Keep migration idempotent for partially upgraded dev databases.
+	}
+	_, err := s.DB.Exec("INSERT INTO schema_version (version, applied_at) VALUES (11, ?)", time.Now().Unix())
+	return err
 }
 
 func (s *Store) migrateV10() error {
@@ -217,6 +226,7 @@ func (s *Store) migrateV4() error {
 			name      TEXT NOT NULL,
 			address   TEXT NOT NULL,
 			port      INTEGER DEFAULT 443,
+			server_name TEXT DEFAULT '',
 			server_id INTEGER DEFAULT 0 REFERENCES servers(id)
 		)
 	`)

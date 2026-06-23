@@ -16,7 +16,19 @@ const emptyDraft: ManagedNode = {
   protocol: "vless",
   network: "raw",
   flow: "",
+  server_name: "",
 };
+
+function supportsServerName(protocol?: string) {
+  switch ((protocol || "").toLowerCase()) {
+    case "vless":
+    case "vmess":
+    case "trojan":
+      return true;
+    default:
+      return false;
+  }
+}
 
 export function NodesPage() {
   const [nodes, setNodes] = useState<ManagedNode[]>([]);
@@ -90,6 +102,7 @@ export function NodesPage() {
       protocol: draft.protocol || "vless",
       network: draft.network || "raw",
       flow: draft.flow?.trim() || "",
+      server_name: draft.server_name?.trim() || "",
       server_id: draft.server_id,
     };
     const nextNodes = editingID ? nodes.map((n) => (n.id === editingID ? nextNode : n)) : [...nodes, nextNode];
@@ -118,13 +131,14 @@ export function NodesPage() {
               <th>协议</th>
               <th>网络</th>
               <th>流控</th>
+              <th>SNI</th>
               <th>所属服务器</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             {nodes.length === 0 ? (
-              <tr><td colSpan={8}><div className="empty-state">暂无节点，请添加。</div></td></tr>
+              <tr><td colSpan={9}><div className="empty-state">暂无节点，请添加。</div></td></tr>
             ) : null}
             {nodes.map((node) => (
               <tr key={node.id}>
@@ -134,6 +148,7 @@ export function NodesPage() {
                 <td>{node.protocol || "vless"}</td>
                 <td>{node.network || "raw"}</td>
                 <td>{node.flow || "-"}</td>
+                <td style={{ fontFamily: "monospace" }}>{node.server_name || "-"}</td>
                 <td style={{ fontSize: 13, color: "#64748b" }}>{serverMap.get(node.server_id ?? 0) || "-"}</td>
                 <td>
                   <div className="btn-group">
@@ -201,6 +216,16 @@ export function NodesPage() {
               <option value="xtls-rprx-direct" />
             </datalist>
           </div>
+          {supportsServerName(draft.protocol) ? (
+            <div className="form-group">
+              <label>SNI / ServerName</label>
+              <input
+                value={draft.server_name || ""}
+                onChange={(e) => setDraft((c) => ({ ...c, server_name: e.target.value }))}
+                placeholder="留空时优先读取面板配置，否则回退到地址"
+              />
+            </div>
+          ) : null}
           <div className="form-group">
             <label>所属服务器</label>
             <select value={draft.server_id ?? ""} onChange={(e) => setDraft((c) => ({ ...c, server_id: e.target.value ? Number(e.target.value) : undefined }))}>

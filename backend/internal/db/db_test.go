@@ -27,7 +27,7 @@ func TestOpenAppliesLatestSchemaVersion(t *testing.T) {
 	}
 }
 
-func TestReplaceNodesPersistsProtocolAndNetwork(t *testing.T) {
+func TestReplaceNodesPersistsProtocolNetworkAndServerName(t *testing.T) {
 	store, err := Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open returned error: %v", err)
@@ -35,13 +35,14 @@ func TestReplaceNodesPersistsProtocolAndNetwork(t *testing.T) {
 	defer store.Close()
 
 	if err := store.ReplaceNodes([]Node2{{
-		NodeID:   "hk-xhttp",
-		Name:     "hk-xhttp",
-		Address:  "www.4738.org",
-		Port:     443,
-		Protocol: "vless",
-		Network:  "xhttp",
-		Flow:     "xtls-rprx-vision",
+		NodeID:     "hk-xhttp",
+		Name:       "hk-xhttp",
+		Address:    "www.4738.org",
+		Port:       443,
+		Protocol:   "vless",
+		Network:    "xhttp",
+		Flow:       "xtls-rprx-vision",
+		ServerName: "cdn.example.com",
 	}}); err != nil {
 		t.Fatalf("ReplaceNodes returned error: %v", err)
 	}
@@ -50,7 +51,7 @@ func TestReplaceNodesPersistsProtocolAndNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListNodeDB returned error: %v", err)
 	}
-	if len(nodes) != 1 || nodes[0].Protocol != "vless" || nodes[0].Network != "xhttp" || nodes[0].Flow != "xtls-rprx-vision" {
+	if len(nodes) != 1 || nodes[0].Protocol != "vless" || nodes[0].Network != "xhttp" || nodes[0].Flow != "xtls-rprx-vision" || nodes[0].ServerName != "cdn.example.com" {
 		t.Fatalf("unexpected nodes: %#v", nodes)
 	}
 }

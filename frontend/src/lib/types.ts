@@ -73,6 +73,7 @@ export type ManagedNode = {
   protocol?: string;
   network?: string;
   flow?: string;
+  server_name?: string;
   server_id?: number;
 };
 

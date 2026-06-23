@@ -10,7 +10,7 @@ func (s *Store) ListNodeDB() ([]Node2, error) {
 	rows, err := s.DB.Query(`
 		SELECT id, node_id, name, address, COALESCE(port, 443),
 		       COALESCE(protocol, 'vless'), COALESCE(network, 'raw'),
-		       COALESCE(flow, ''), COALESCE(server_id, 0)
+		       COALESCE(flow, ''), COALESCE(server_name, ''), COALESCE(server_id, 0)
 		FROM nodes ORDER BY name
 	`)
 	if err != nil {
@@ -21,7 +21,7 @@ func (s *Store) ListNodeDB() ([]Node2, error) {
 	out := make([]Node2, 0)
 	for rows.Next() {
 		var n Node2
-		if err := rows.Scan(&n.ID, &n.NodeID, &n.Name, &n.Address, &n.Port, &n.Protocol, &n.Network, &n.Flow, &n.ServerID); err != nil {
+		if err := rows.Scan(&n.ID, &n.NodeID, &n.Name, &n.Address, &n.Port, &n.Protocol, &n.Network, &n.Flow, &n.ServerName, &n.ServerID); err != nil {
 			return nil, err
 		}
 		out = append(out, n)
@@ -55,10 +55,11 @@ func (s *Store) ReplaceNodes(nodes []Node2) error {
 			n.Network = "raw"
 		}
 		n.Flow = strings.TrimSpace(n.Flow)
+		n.ServerName = strings.TrimSpace(n.ServerName)
 		_, err := tx.Exec(`
-			INSERT INTO nodes (node_id, name, address, port, protocol, network, flow, server_id)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		`, nid, n.Name, n.Address, n.Port, n.Protocol, n.Network, n.Flow, n.ServerID)
+			INSERT INTO nodes (node_id, name, address, port, protocol, network, flow, server_name, server_id)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, nid, n.Name, n.Address, n.Port, n.Protocol, n.Network, n.Flow, n.ServerName, n.ServerID)
 		if err != nil {
 			return err
 		}

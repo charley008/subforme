@@ -152,6 +152,40 @@ func TestApplyManagedNodesPreservesTemplateFlowWhenManagedFlowIsEmpty(t *testing
 	}
 }
 
+func TestApplyManagedNodesOverridesServerNameWhenConfigured(t *testing.T) {
+	template := xui.Node{
+		Name:       "hk",
+		Type:       "vless",
+		Server:     "panel.example.com",
+		Port:       443,
+		Network:    "xhttp",
+		TLS:        true,
+		ServerName: "panel-sni.example.com",
+		ServerID:   1,
+	}
+
+	got := applyManagedNodes(
+		[]xui.Node{template},
+		[]config.ManagedNode{{
+			ID:         "hk-xhttp",
+			Name:       "hk-xhttp",
+			Address:    "hk.example.com",
+			Port:       443,
+			Protocol:   "vless",
+			Network:    "xhttp",
+			ServerName: "cdn.example.com",
+			ServerID:   1,
+		}},
+		[]string{"hk-xhttp"},
+	)
+	if len(got) != 1 {
+		t.Fatalf("expected one managed node, got %#v", got)
+	}
+	if got[0].ServerName != "cdn.example.com" {
+		t.Fatalf("expected managed servername override, got %#v", got[0])
+	}
+}
+
 func TestApplyImportedClientDoesNotClearFlowFromEmptyInbound(t *testing.T) {
 	user := &db.User{
 		Email:    "alice",
