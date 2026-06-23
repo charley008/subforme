@@ -1699,7 +1699,7 @@ func (s Service) syncServerInbounds(ctx context.Context, cli *xui.Client, sv db.
 		}
 		record := dbInboundToXUI(main)
 		if !ok {
-			log.Printf("[sync] %s: creating inbound %s", sv.Name, main.Remark)
+			log.Printf("[sync] %s: creating inbound %s (%s)", sv.Name, main.Remark, describeInboundIdentity(main.Protocol, main.Listen, main.Port, main.Tag))
 			if err := cli.AddInbound(ctx, record); err != nil {
 				return nil, err
 			}
@@ -1707,7 +1707,7 @@ func (s Service) syncServerInbounds(ctx context.Context, cli *xui.Client, sv db.
 		}
 		usedRemoteIDs[remoteInb.ID] = true
 		if !inboundEquivalent(main, remoteInb) {
-			log.Printf("[sync] %s: updating inbound %s", sv.Name, main.Remark)
+			log.Printf("[sync] %s: updating inbound %s (%s): %s", sv.Name, main.Remark, describeInboundIdentity(main.Protocol, main.Listen, main.Port, main.Tag), describeInboundChanges(main, remoteInb))
 			if err := cli.UpdateInbound(ctx, int(remoteInb.ID), record); err != nil {
 				return nil, err
 			}
@@ -1720,7 +1720,7 @@ func (s Service) syncServerInbounds(ctx context.Context, cli *xui.Client, sv db.
 		if usedRemoteIDs[remoteInb.ID] {
 			continue
 		}
-		log.Printf("[sync] %s: deleting stale inbound %s", sv.Name, remoteInb.Remark)
+		log.Printf("[sync] %s: deleting stale inbound %s (%s)", sv.Name, remoteInb.Remark, describeInboundIdentity(remoteInb.Protocol, remoteInb.Listen, remoteInb.Port, remoteInb.Tag))
 		if err := cli.DeleteInbound(ctx, int(remoteInb.ID)); err != nil {
 			return nil, err
 		}
@@ -1811,6 +1811,7 @@ func syncServerInboundClients(ctx context.Context, cli *xui.Client, remoteInboun
 			syncedUsers += len(desiredClients)
 			continue
 		}
+		log.Printf("[sync] inbound clients update %s (%s): %s", remoteInb.Remark, describeInboundIdentity(remoteInb.Protocol, remoteInb.Listen, remoteInb.Port, remoteInb.Tag), describeClientListChanges(currentClients, desiredClients))
 		record := dbInboundToXUI(remoteInb)
 		record.Settings = replaceClientsInSettings(remoteInb.SettingsJSON, desiredClients)
 		if err := cli.UpdateInboundWithClients(ctx, remoteInb.InboundID, record); err != nil {
@@ -1823,6 +1824,111 @@ func syncServerInboundClients(ctx context.Context, cli *xui.Client, remoteInboun
 		}
 	}
 	return syncedUsers, updatedInbounds, deletedClients, nil
+}
+
+func describeInboundIdentity(protocol, listen string, port int, tag string) string {
+	if strings.TrimSpace(tag) != "" {
+		return fmt.Sprintf("tag=%s, protocol=%s, listen=%s, port=%d", strings.TrimSpace(tag), protocol, listen, port)
+	}
+	return fmt.Sprintf("protocol=%s, listen=%s, port=%d", protocol, listen, port)
+}
+
+func describeInboundChanges(main db.Inbound, remote xui.InboundRecord) string {
+	changes := make([]string, 0, 8)
+	appendChange := func(name string, before, after any) {
+		if before == after {
+			return
+		}
+		changes = append(changes, fmt.Sprintf("%s: %v -> %v", name, before, after))
+	}
+
+	appendChange("remark", remote.Remark, main.Remark)
+	appendChange("listen", remote.Listen, main.Listen)
+	appendChange("port", remote.Port, main.Port)
+	appendChange("protocol", remote.Protocol, main.Protocol)
+	appendChange("enable", remote.Enable, main.Enable)
+	appendChange("total", remote.Total, main.Total)
+	appendChange("expiry_time", remote.ExpiryTime, main.ExpiryTime)
+	appendChange("traffic_reset", remote.TrafficReset, main.TrafficReset)
+	appendChange("tag", remote.Tag, main.Tag)
+	if settingsWithoutClients(remote.Settings) != settingsWithoutClients(main.SettingsJSON) {
+		changes = append(changes, "settings(without clients) changed")
+	}
+	if remote.StreamSettings != main.StreamSettingsJSON {
+		changes = append(changes, "stream_settings changed")
+	}
+	if remote.Sniffing != main.SniffingJSON {
+		changes = append(changes, "sniffing changed")
+	}
+	if len(changes) == 0 {
+		return "payload changed"
+	}
+	return strings.Join(changes, "; ")
+}
+
+func describeClientListChanges(current, desired []xui.InboundClient) string {
+	currentByEmail := make(map[string]xui.InboundClient, len(current))
+	desiredByEmail := make(map[string]xui.InboundClient, len(desired))
+	for _, client := range current {
+		if client.Email == "" {
+			continue
+		}
+		currentByEmail[strings.ToLower(client.Email)] = client
+	}
+	for _, client := range desired {
+		if client.Email == "" {
+			continue
+		}
+		desiredByEmail[strings.ToLower(client.Email)] = client
+	}
+
+	changes := make([]string, 0, len(current)+len(desired))
+	for key, want := range desiredByEmail {
+		got, ok := currentByEmail[key]
+		if !ok {
+			changes = append(changes, fmt.Sprintf("add user=%s", want.Email))
+			continue
+		}
+		if diff := describeSingleClientChange(got, want); diff != "" {
+			changes = append(changes, fmt.Sprintf("update user=%s (%s)", want.Email, diff))
+		}
+	}
+	for key, got := range currentByEmail {
+		if _, ok := desiredByEmail[key]; ok {
+			continue
+		}
+		changes = append(changes, fmt.Sprintf("remove user=%s", got.Email))
+	}
+	if len(changes) == 0 {
+		return fmt.Sprintf("client count changed current=%d desired=%d", len(current), len(desired))
+	}
+	return strings.Join(changes, "; ")
+}
+
+func describeSingleClientChange(current, desired xui.InboundClient) string {
+	changes := make([]string, 0, 10)
+	appendChange := func(name string, before, after any) {
+		if before == after {
+			return
+		}
+		changes = append(changes, fmt.Sprintf("%s: %v -> %v", name, before, after))
+	}
+
+	appendChange("uuid", current.ID, desired.ID)
+	appendChange("password", current.Password, desired.Password)
+	appendChange("auth", current.Auth, desired.Auth)
+	appendChange("flow", current.Flow, desired.Flow)
+	appendChange("security", current.Security, desired.Security)
+	appendChange("limit_ip", current.LimitIP, desired.LimitIP)
+	appendChange("total_gb", current.TotalGB, desired.TotalGB)
+	appendChange("expiry_time", current.ExpiryTime, desired.ExpiryTime)
+	appendChange("sub_id", current.SubID, desired.SubID)
+	appendChange("tg_id", current.TgID, desired.TgID)
+	appendChange("reset", current.Reset, desired.Reset)
+	appendChange("comment", current.Comment, desired.Comment)
+	appendChange("enable", current.Enable, desired.Enable)
+
+	return strings.Join(changes, ", ")
 }
 
 func preserveRemoteClientEnable(desired, current []xui.InboundClient) []xui.InboundClient {
