@@ -2,7 +2,7 @@
 
 ## 主要更新
 
-- 将 RAW 传输在 Mihomo/Stash 订阅中输出为 `tcp`，提升客户端兼容性。
+- fix：修复 RAW 传输在 Mihomo/Stash 订阅中的兼容问题，统一输出为 `tcp`。
 
 # v1.4.0
 
