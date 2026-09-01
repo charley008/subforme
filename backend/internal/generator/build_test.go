@@ -120,6 +120,12 @@ rules:
 	}
 
 	got := string(raw)
+	if !strings.Contains(got, "network: tcp") {
+		t.Fatalf("raw transport should be emitted as tcp for Mihomo/Stash, got %s", got)
+	}
+	if strings.Contains(got, "network: raw") {
+		t.Fatalf("subscription should not emit raw transport, got %s", got)
+	}
 	if strings.Contains(got, "xhttp-opts:") {
 		t.Fatalf("non-xhttp node should not contain xhttp opts, got %s", got)
 	}

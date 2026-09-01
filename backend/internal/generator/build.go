@@ -92,14 +92,14 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 func buildProxy(node xui.Node) Proxy {
 	isXHTTP := node.Network == "xhttp"
 	proxy := Proxy{
-		Name:    node.Name,
-		Type:    node.Type,
-		Server:  node.Server,
-		Port:    node.Port,
-		Network: node.Network,
-		TLS:     node.TLS,
-		UDP:     node.UDP,
-		ALPN:    node.ALPN,
+		Name:              node.Name,
+		Type:              node.Type,
+		Server:            node.Server,
+		Port:              node.Port,
+		Network:           subscriptionNetwork(node.Network),
+		TLS:               node.TLS,
+		UDP:               node.UDP,
+		ALPN:              node.ALPN,
 		ServerName:        node.ServerName,
 		ClientFingerprint: node.ClientFingerprint,
 	}
@@ -125,6 +125,15 @@ func buildProxy(node xui.Node) Proxy {
 	}
 
 	return proxy
+}
+
+func subscriptionNetwork(network string) string {
+	switch network {
+	case "", "raw", "tcp":
+		return "tcp"
+	default:
+		return network
+	}
 }
 
 func applyVLESSTemplate(proxy *Proxy, node xui.Node, isXHTTP bool) {

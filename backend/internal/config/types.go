@@ -1,6 +1,6 @@
 package config
 
-const Version = "v1.4.0"
+const Version = "v1.4.1"
 
 type XUIConfig struct {
 	BaseURL  string `yaml:"base_url" json:"base_url"`
