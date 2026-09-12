@@ -105,6 +105,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	registerAuthRoutes(mux, deps)
 	registerDashboardRoutes(mux, deps)
 	registerConfigRoutes(mux, deps)
+	registerNodePreviewRoute(mux, deps)
 	registerBackupRoutes(mux, deps)
 	registerPreviewRoutes(mux, deps)
 	registerDBRoutes(mux, deps)

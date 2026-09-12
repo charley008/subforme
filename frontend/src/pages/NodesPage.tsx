@@ -37,6 +37,37 @@ export function NodesPage() {
   const [editingID, setEditingID] = useState<string | null>(null);
   const [message, setMessage] = useState("节点代表一台 VPS 机器，你手动添加维护。");
   const [saving, setSaving] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [previewUser, setPreviewUser] = useState("");
+  const [previewUsers, setPreviewUsers] = useState<{ email: string }[]>([]);
+  const [preview, setPreview] = useState("");
+  const [previewError, setPreviewError] = useState("");
+  const [previewing, setPreviewing] = useState(false);
+
+  useEffect(() => {
+    setPreview("");
+    setPreviewError("");
+  }, [draft, previewUser]);
+
+  useEffect(() => {
+    if (advancedOpen) {
+      void getJSON<{ email: string }[]>("/api/users/search").then(setPreviewUsers).catch(() => setPreviewUsers([]));
+    }
+  }, [advancedOpen]);
+
+  async function handlePreview() {
+    setPreviewing(true);
+    setPreview("");
+    setPreviewError("");
+    try {
+      const result = await postJSON<{ yaml: string }>("/api/nodes/preview", { user: previewUser, node: draft });
+      setPreview(result.yaml);
+    } catch (error) {
+      setPreviewError(error instanceof Error ? error.message : "预览失败");
+    } finally {
+      setPreviewing(false);
+    }
+  }
 
   useEffect(() => {
     void Promise.all([loadNodes(), loadServers()]);
@@ -67,8 +98,10 @@ export function NodesPage() {
       const saved = await postJSON<ManagedNode[]>("/api/nodes", nextNodes);
       setNodes(saved);
       setMessage(successMessage);
+      return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存节点失败");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -77,6 +110,7 @@ export function NodesPage() {
   function resetDraft() {
     setDraft({ ...emptyDraft });
     setEditingID(null);
+    setAdvancedOpen(false);
   }
 
   function handleDelete(id: string) {
@@ -86,10 +120,11 @@ export function NodesPage() {
   function handleEdit(node: ManagedNode) {
     setDraft(node);
     setEditingID(node.id);
+    setAdvancedOpen(Boolean(node.mihomo_options));
     setMessage(`正在修改节点：${node.name}`);
   }
 
-  function handleSaveDraft() {
+  async function handleSaveDraft() {
     if (!draft.name.trim() || !draft.address.trim()) {
       setMessage("请填写节点名称和地址。");
       return;
@@ -104,10 +139,12 @@ export function NodesPage() {
       flow: draft.flow?.trim() || "",
       server_name: draft.server_name?.trim() || "",
       server_id: draft.server_id,
+      mihomo_options: draft.mihomo_options || "",
     };
     const nextNodes = editingID ? nodes.map((n) => (n.id === editingID ? nextNode : n)) : [...nodes, nextNode];
-    void saveNodes(nextNodes, editingID ? "节点已修改。" : "节点已添加。");
-    resetDraft();
+    if (await saveNodes(nextNodes, editingID ? "节点已修改。" : "节点已添加。")) {
+      resetDraft();
+    }
   }
 
   const serverMap = new Map(servers.map((s) => [s.id, s.name]));
@@ -142,7 +179,7 @@ export function NodesPage() {
             ) : null}
             {nodes.map((node) => (
               <tr key={node.id}>
-                <td><strong>{node.name}</strong></td>
+                <td><strong>{node.name}</strong>{node.mihomo_options?.trim() ? <span className="node-options-badge">自定义参数</span> : null}</td>
                 <td style={{ fontFamily: "monospace" }}>{node.address}</td>
                 <td>{node.port || 443}</td>
                 <td>{node.protocol || "vless"}</td>
@@ -152,8 +189,8 @@ export function NodesPage() {
                 <td style={{ fontSize: 13, color: "#64748b" }}>{serverMap.get(node.server_id ?? 0) || "-"}</td>
                 <td>
                   <div className="btn-group">
-                    <button type="button" className="btn btn-sm" onClick={() => handleEdit(node)}>修改</button>
-                    <button type="button" className="btn btn-sm btn-danger" onClick={() => handleDelete(node.id)}>删除</button>
+                    <button type="button" className="btn btn-sm" disabled={saving || previewing} onClick={() => handleEdit(node)}>修改</button>
+                    <button type="button" className="btn btn-sm btn-danger" disabled={saving || previewing} onClick={() => handleDelete(node.id)}>删除</button>
                   </div>
                 </td>
               </tr>
@@ -170,6 +207,7 @@ export function NodesPage() {
 
       <div className="form-card">
         <div className="card-header"><h2>{editingID ? "修改节点" : "添加节点"}</h2></div>
+        <fieldset disabled={saving || previewing} className="node-editor-fields">
         <div className="form-grid">
           <div className="form-group">
             <label>名称</label>
@@ -236,15 +274,41 @@ export function NodesPage() {
             </select>
           </div>
         </div>
+        <details className="node-advanced" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+          <summary>高级配置 <span>Mihomo YAML · 可选</span></summary>
+          <div className="node-advanced-body">
+            <p>在自动生成的节点配置上补充或覆盖参数。嵌套对象保留未填写的字段，数组整体替换；留空使用默认配置。</p>
+            <div className="node-options-toolbar">
+              <label htmlFor="mihomo-options">自定义参数</label>
+              <button type="button" className="btn btn-sm" disabled={Boolean(draft.mihomo_options?.trim())} onClick={() => setDraft((c) => ({ ...c, mihomo_options: "reality-opts:\n  support-x25519mlkem768: true\n" }))}>填入 REALITY 示例</button>
+            </div>
+            <textarea id="mihomo-options" className="node-yaml-editor" spellCheck={false} value={draft.mihomo_options || ""} onChange={(event) => setDraft((c) => ({ ...c, mihomo_options: event.target.value }))} placeholder={"reality-opts:\n  support-x25519mlkem768: true"} rows={8} />
+            <p className="node-options-hint">直接填写单个节点的参数，不需要 proxies: 或列表前缀。节点名称请在上方修改。参数支持情况取决于 Mihomo 版本。</p>
+            <div className="node-preview-controls">
+              <div className="form-group">
+                <label htmlFor="node-preview-user">预览用户</label>
+                <select id="node-preview-user" value={previewUser} onChange={(event) => setPreviewUser(event.target.value)}>
+                  <option value="">选择用户以读取其入站配置</option>
+                  {previewUsers.map((user) => <option key={user.email} value={user.email}>{user.email}</option>)}
+                </select>
+              </div>
+              <button type="button" className="btn" disabled={!previewUser || previewing} onClick={() => void handlePreview()}>{previewing ? "正在生成…" : "预览合并结果"}</button>
+            </div>
+            <p className="node-options-hint">使用当前未保存的表单与该用户的入站生成单个节点配置；不会保存修改或更改用户的节点选择。</p>
+            {previewError ? <div role="alert" className="message">{previewError}</div> : null}
+            {preview ? <div className="node-preview-result"><strong>合并后的节点配置</strong><pre>{preview}</pre></div> : null}
+          </div>
+        </details>
         <div className="form-footer">
           {editingID ? <button type="button" className="btn" onClick={resetDraft}>取消</button> : null}
-          <button type="button" className="btn btn-primary" onClick={handleSaveDraft}>
+          <button type="button" className="btn btn-primary" disabled={saving || previewing} onClick={() => void handleSaveDraft()}>
             {editingID ? "保存修改" : "添加节点"}
           </button>
         </div>
+        </fieldset>
       </div>
 
-      <div className="message" style={{ marginTop: 16 }}>{message}</div>
+      <div className="message" role="status" style={{ marginTop: 16 }}>{message}</div>
     </div>
   );
 }

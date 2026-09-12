@@ -15,6 +15,7 @@ import (
 	"subforme/backend/internal/generator"
 	"subforme/backend/internal/groups"
 	"subforme/backend/internal/xui"
+	"subforme/backend/pkg/proxyopts"
 )
 
 const trafficRefreshRequestTimeout = 30 * time.Second
@@ -243,15 +244,16 @@ func (s Service) loadManagedNodes() []config.ManagedNode {
 			out := make([]config.ManagedNode, len(dbNodes))
 			for i, n := range dbNodes {
 				out[i] = config.ManagedNode{
-					ID:         n.NodeID,
-					Name:       n.Name,
-					Address:    n.Address,
-					Port:       n.Port,
-					Protocol:   n.Protocol,
-					Network:    n.Network,
-					Flow:       n.Flow,
-					ServerName: n.ServerName,
-					ServerID:   n.ServerID,
+					ID:            n.NodeID,
+					Name:          n.Name,
+					Address:       n.Address,
+					Port:          n.Port,
+					Protocol:      n.Protocol,
+					Network:       n.Network,
+					Flow:          n.Flow,
+					ServerName:    n.ServerName,
+					MihomoOptions: n.MihomoOptions,
+					ServerID:      n.ServerID,
 				}
 			}
 			return out
@@ -348,15 +350,16 @@ func (s Service) ReadManagedNodes() ([]config.ManagedNode, error) {
 			out := make([]config.ManagedNode, len(dbNodes))
 			for i, n := range dbNodes {
 				out[i] = config.ManagedNode{
-					ID:         n.NodeID,
-					Name:       n.Name,
-					Address:    n.Address,
-					Port:       n.Port,
-					Protocol:   n.Protocol,
-					Network:    n.Network,
-					Flow:       n.Flow,
-					ServerName: n.ServerName,
-					ServerID:   n.ServerID,
+					ID:            n.NodeID,
+					Name:          n.Name,
+					Address:       n.Address,
+					Port:          n.Port,
+					Protocol:      n.Protocol,
+					Network:       n.Network,
+					Flow:          n.Flow,
+					ServerName:    n.ServerName,
+					MihomoOptions: n.MihomoOptions,
+					ServerID:      n.ServerID,
 				}
 			}
 			return out, nil
@@ -367,20 +370,26 @@ func (s Service) ReadManagedNodes() ([]config.ManagedNode, error) {
 
 func (s Service) UpdateManagedNodes(next []config.ManagedNode) error {
 	next = normalizeManagedNodes(next)
+	for _, n := range next {
+		if _, err := proxyopts.Parse(n.MihomoOptions); err != nil {
+			return fmt.Errorf("节点 %q: %w", n.Name, err)
+		}
+	}
 	if s.DB != nil {
 		dbNodes := make([]db.Node2, len(next))
 		validIDs := make([]string, 0, len(next))
 		for i, n := range next {
 			dbNodes[i] = db.Node2{
-				NodeID:     n.ID,
-				Name:       n.Name,
-				Address:    n.Address,
-				Port:       n.Port,
-				Protocol:   normalizeManagedProtocol(n.Protocol),
-				Network:    normalizeManagedNetwork(n.Network),
-				Flow:       normalizeManagedFlow(n.Flow),
-				ServerName: normalizeManagedServerName(n.ServerName),
-				ServerID:   n.ServerID,
+				NodeID:        n.ID,
+				Name:          n.Name,
+				Address:       n.Address,
+				Port:          n.Port,
+				Protocol:      normalizeManagedProtocol(n.Protocol),
+				Network:       normalizeManagedNetwork(n.Network),
+				Flow:          normalizeManagedFlow(n.Flow),
+				ServerName:    normalizeManagedServerName(n.ServerName),
+				MihomoOptions: n.MihomoOptions,
+				ServerID:      n.ServerID,
 			}
 			validIDs = append(validIDs, n.ID)
 		}
@@ -731,6 +740,7 @@ func applyManagedNodes(templateNodes []xui.Node, managedNodes []config.ManagedNo
 			proxy.Port = managed.Port
 		}
 		proxy.ID = managed.ID
+		proxy.MihomoOptions = managed.MihomoOptions
 		expanded = append(expanded, proxy)
 	}
 

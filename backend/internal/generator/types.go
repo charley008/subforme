@@ -1,8 +1,9 @@
 package generator
 
 type RealityOpts struct {
-	PublicKey string `yaml:"public-key,omitempty"`
-	ShortID   string `yaml:"short-id,omitempty"`
+	PublicKey             string `yaml:"public-key,omitempty"`
+	ShortID               string `yaml:"short-id,omitempty"`
+	SupportX25519MLKEM768 bool   `yaml:"support-x25519mlkem768"`
 }
 
 type XHTTPOpts struct {

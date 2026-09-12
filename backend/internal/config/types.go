@@ -1,6 +1,6 @@
 package config
 
-const Version = "v1.4.1"
+const Version = "v1.4.2"
 
 type XUIConfig struct {
 	BaseURL  string `yaml:"base_url" json:"base_url"`
@@ -23,15 +23,16 @@ type AppConfig struct {
 }
 
 type ManagedNode struct {
-	ID         string `yaml:"id" json:"id"`
-	Name       string `yaml:"name" json:"name"`
-	Address    string `yaml:"address" json:"address"`
-	Port       int    `yaml:"port,omitempty" json:"port,omitempty"`
-	Protocol   string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
-	Network    string `yaml:"network,omitempty" json:"network,omitempty"`
-	Flow       string `yaml:"flow,omitempty" json:"flow,omitempty"`
-	ServerName string `yaml:"server_name,omitempty" json:"server_name,omitempty"`
-	ServerID   int64  `yaml:"server_id,omitempty" json:"server_id,omitempty"`
+	MihomoOptions string `yaml:"mihomo_options,omitempty" json:"mihomo_options,omitempty"`
+	ID            string `yaml:"id" json:"id"`
+	Name          string `yaml:"name" json:"name"`
+	Address       string `yaml:"address" json:"address"`
+	Port          int    `yaml:"port,omitempty" json:"port,omitempty"`
+	Protocol      string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+	Network       string `yaml:"network,omitempty" json:"network,omitempty"`
+	Flow          string `yaml:"flow,omitempty" json:"flow,omitempty"`
+	ServerName    string `yaml:"server_name,omitempty" json:"server_name,omitempty"`
+	ServerID      int64  `yaml:"server_id,omitempty" json:"server_id,omitempty"`
 }
 
 type RuntimeConfig struct {

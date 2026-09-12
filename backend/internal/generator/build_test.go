@@ -132,6 +132,9 @@ rules:
 	if !strings.Contains(got, "reality-opts:") {
 		t.Fatalf("expected reality opts to remain for reality node, got %s", got)
 	}
+	if !strings.Contains(got, "support-x25519mlkem768: true") {
+		t.Fatalf("expected ML-KEM support for reality node, got %s", got)
+	}
 }
 
 func TestBuildFinalYAMLUsesProtocolCredentials(t *testing.T) {

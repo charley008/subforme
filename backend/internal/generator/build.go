@@ -1,11 +1,15 @@
 package generator
 
 import (
+	"fmt"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 
 	"subforme/backend/internal/config"
 	"subforme/backend/internal/groups"
 	"subforme/backend/internal/xui"
+	"subforme/backend/pkg/proxyopts"
 	"subforme/backend/pkg/yamlx"
 )
 
@@ -24,9 +28,13 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 		return nil, err
 	}
 
-	proxies := make([]Proxy, 0, len(nodes))
+	proxies := make([]any, 0, len(nodes))
 	for _, node := range nodes {
-		proxies = append(proxies, buildProxy(node))
+		proxy, err := buildProxyOptions(node)
+		if err != nil {
+			return nil, fmt.Errorf("节点 %q: %w", node.Name, err)
+		}
+		proxies = append(proxies, proxy)
 	}
 
 	selectedSet := map[string]config.ProviderAddon{}
@@ -87,6 +95,36 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 		return nil, err
 	}
 	return []byte(compactCommentSpacing(string(raw))), nil
+}
+
+func buildProxyOptions(node xui.Node) (any, error) {
+	override, err := proxyopts.Parse(node.MihomoOptions)
+	if err != nil {
+		return nil, err
+	}
+	proxy := buildProxy(node)
+	if len(override) == 0 {
+		return proxy, nil
+	}
+	raw, err := yaml.Marshal(proxy)
+	if err != nil {
+		return nil, err
+	}
+	var base map[string]any
+	if err := yaml.Unmarshal(raw, &base); err != nil {
+		return nil, err
+	}
+	proxyopts.Merge(base, override)
+	return base, nil
+}
+
+// BuildProxyYAML uses the same merge pipeline as subscription generation.
+func BuildProxyYAML(node xui.Node) ([]byte, error) {
+	proxy, err := buildProxyOptions(node)
+	if err != nil {
+		return nil, err
+	}
+	return yaml.Marshal(proxy)
 }
 
 func buildProxy(node xui.Node) Proxy {
@@ -162,8 +200,9 @@ func applyVLESSTemplate(proxy *Proxy, node xui.Node, isXHTTP bool) {
 	proxy.Flow = node.Flow
 	if node.RealityPublicKey != "" || node.RealityShortID != "" {
 		proxy.RealityOpts = &RealityOpts{
-			PublicKey: node.RealityPublicKey,
-			ShortID:   node.RealityShortID,
+			PublicKey:             node.RealityPublicKey,
+			ShortID:               node.RealityShortID,
+			SupportX25519MLKEM768: true,
 		}
 	}
 }

@@ -14,6 +14,7 @@ type UserRecord struct {
 }
 
 type Node struct {
+	MihomoOptions     string   `json:"mihomo_options,omitempty"`
 	ID                string   `json:"id,omitempty"`
 	Name              string   `json:"name"`
 	Type              string   `json:"type"`

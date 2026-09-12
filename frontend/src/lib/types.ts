@@ -66,6 +66,7 @@ export type UserSummary = {
 };
 
 export type ManagedNode = {
+  mihomo_options?: string;
   id: string;
   name: string;
   address: string;
