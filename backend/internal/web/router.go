@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 
 	"subforme/backend/internal/app"
+	"subforme/backend/internal/auth"
 	"subforme/backend/internal/config"
 	"subforme/backend/internal/db"
 	"subforme/backend/internal/xui"
@@ -78,7 +80,8 @@ type DBService interface {
 type Dependencies struct {
 	SubscriptionService SubscriptionService
 	AuthService         AuthService
-	SessionSecret       string
+	Sessions            *auth.Sessions
+	authMu              *sync.Mutex
 	FrontendDir         string
 	ConfigService       ConfigService
 	XUIService          XUIService
@@ -91,6 +94,10 @@ type Dependencies struct {
 }
 
 func NewRouter(deps Dependencies) http.Handler {
+	if deps.Sessions == nil {
+		deps.Sessions = auth.NewSessions()
+	}
+	deps.authMu = &sync.Mutex{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

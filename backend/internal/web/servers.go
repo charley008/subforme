@@ -14,27 +14,27 @@ import (
 
 func registerDBRoutes(mux *http.ServeMux, deps Dependencies) {
 	// Servers CRUD
-	mux.HandleFunc("/api/servers", requireSession(deps.SessionSecret, handleServersList(deps)))
-	mux.HandleFunc("/api/servers/add", requireSession(deps.SessionSecret, handleServerAdd(deps)))
-	mux.HandleFunc("/api/servers/update/", requireSession(deps.SessionSecret, handleServerUpdate(deps)))
-	mux.HandleFunc("/api/servers/delete/", requireSession(deps.SessionSecret, handleServerDelete(deps)))
+	mux.HandleFunc("/api/servers", requireSession(deps.Sessions, handleServersList(deps)))
+	mux.HandleFunc("/api/servers/add", requireSession(deps.Sessions, handleServerAdd(deps)))
+	mux.HandleFunc("/api/servers/update/", requireSession(deps.Sessions, handleServerUpdate(deps)))
+	mux.HandleFunc("/api/servers/delete/", requireSession(deps.Sessions, handleServerDelete(deps)))
 
 	// Import & Sync & Traffic
-	mux.HandleFunc("/api/servers/import/", requireSession(deps.SessionSecret, handleServerImport(deps)))
-	mux.HandleFunc("/api/sync", requireSession(deps.SessionSecret, handleSync(deps)))
-	mux.HandleFunc("/api/traffic/refresh", requireSession(deps.SessionSecret, handleTrafficRefresh(deps)))
-	mux.HandleFunc("/api/traffic/load", requireSession(deps.SessionSecret, handleTrafficLoad(deps)))
-	mux.HandleFunc("/api/traffic/reset-server/", requireSession(deps.SessionSecret, handleTrafficResetServer(deps)))
+	mux.HandleFunc("/api/servers/import/", requireSession(deps.Sessions, handleServerImport(deps)))
+	mux.HandleFunc("/api/sync", requireSession(deps.Sessions, handleSync(deps)))
+	mux.HandleFunc("/api/traffic/refresh", requireSession(deps.Sessions, handleTrafficRefresh(deps)))
+	mux.HandleFunc("/api/traffic/load", requireSession(deps.Sessions, handleTrafficLoad(deps)))
+	mux.HandleFunc("/api/traffic/reset-server/", requireSession(deps.Sessions, handleTrafficResetServer(deps)))
 
 	// Server test connection
-	mux.HandleFunc("/api/servers/test/", requireSession(deps.SessionSecret, handleServerTest(deps)))
+	mux.HandleFunc("/api/servers/test/", requireSession(deps.Sessions, handleServerTest(deps)))
 
 	// DB Users
-	mux.HandleFunc("/api/db/users", requireSession(deps.SessionSecret, handleDBUsersList(deps)))
-	mux.HandleFunc("/api/db/users/search", requireSession(deps.SessionSecret, handleDBUsersSearch(deps)))
-	mux.HandleFunc("/api/db/users/add", requireSession(deps.SessionSecret, handleDBUserAdd(deps)))
-	mux.HandleFunc("/api/db/users/update/", requireSession(deps.SessionSecret, handleDBUserUpdate(deps)))
-	mux.HandleFunc("/api/db/users/delete/", requireSession(deps.SessionSecret, handleDBUserDelete(deps)))
+	mux.HandleFunc("/api/db/users", requireSession(deps.Sessions, handleDBUsersList(deps)))
+	mux.HandleFunc("/api/db/users/search", requireSession(deps.Sessions, handleDBUsersSearch(deps)))
+	mux.HandleFunc("/api/db/users/add", requireSession(deps.Sessions, handleDBUserAdd(deps)))
+	mux.HandleFunc("/api/db/users/update/", requireSession(deps.Sessions, handleDBUserUpdate(deps)))
+	mux.HandleFunc("/api/db/users/delete/", requireSession(deps.Sessions, handleDBUserDelete(deps)))
 }
 
 // ─── Servers CRUD ──────────────────────────────────────────────────

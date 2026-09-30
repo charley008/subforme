@@ -12,7 +12,7 @@ type nodePreviewService interface {
 }
 
 func registerNodePreviewRoute(mux *http.ServeMux, deps Dependencies) {
-	mux.HandleFunc("/api/nodes/preview", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nodes/preview", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return

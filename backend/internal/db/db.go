@@ -22,7 +22,9 @@ func Open(dir string) (*Store, error) {
 	}
 	path := filepath.Join(dir, "subforme.db")
 
-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_busy_timeout=5000&_cache_size=-20000")
+	// modernc.org/sqlite v1.50 uses _pragma, not go-sqlite3's DSN aliases.
+	// Preserve the existing DELETE journal mode until backups use SQLite snapshots.
+	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(DELETE)&_pragma=busy_timeout(5000)&_pragma=cache_size(-20000)")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
@@ -32,6 +34,7 @@ func Open(dir string) (*Store, error) {
 
 	store := &Store{DB: db}
 	if err := store.migrate(); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("migrate db: %w", err)
 	}
 	return store, nil

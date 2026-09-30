@@ -15,7 +15,7 @@ type dashboardSummary struct {
 }
 
 func registerDashboardRoutes(mux *http.ServeMux, deps Dependencies) {
-	mux.HandleFunc("/api/dashboard/summary", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/dashboard/summary", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if deps.ConfigService == nil || deps.XUIService == nil || deps.UserService == nil {
 			http.Error(w, "dashboard dependencies unavailable", http.StatusNotImplemented)
 			return
@@ -72,7 +72,7 @@ func registerDashboardRoutes(mux *http.ServeMux, deps Dependencies) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(summary)
 	}))
-	mux.HandleFunc("/api/dashboard/traffic", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/dashboard/traffic", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		type barItem struct {
 			ServerID   int64  `json:"server_id"`
 			ServerName string `json:"server_name"`

@@ -2,9 +2,32 @@ package db
 
 import (
 	"testing"
+	"time"
 
 	"subforme/backend/internal/config"
 )
+
+func TestOpenAppliesPragmasOnEachConnection(t *testing.T) {
+	store, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	for range 2 {
+		var journal string
+		if err := store.DB.QueryRow("PRAGMA journal_mode").Scan(&journal); err != nil || journal != "delete" {
+			t.Fatalf("journal_mode = %q, err = %v", journal, err)
+		}
+		for name, want := range map[string]int{"busy_timeout": 5000, "cache_size": -20000} {
+			var got int
+			if err := store.DB.QueryRow("PRAGMA " + name).Scan(&got); err != nil || got != want {
+				t.Fatalf("%s = %d, want %d, err = %v", name, got, want, err)
+			}
+		}
+		// Force the next query to open a fresh connection.
+		store.DB.SetConnMaxLifetime(time.Nanosecond)
+	}
+}
 
 func TestOpenAppliesLatestSchemaVersion(t *testing.T) {
 	store, err := Open(t.TempDir())

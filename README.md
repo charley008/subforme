@@ -55,7 +55,6 @@ docker compose up -d
   "listen": ":8080",
   "admin_username": "admin",
   "admin_password": "123456",
-  "session_secret": "random-secret",
   "config_dir": ".",
   "frontend_dir": "../web"
 }
@@ -85,10 +84,11 @@ docker compose up -d
 |------|------|--------|
 | `SUBFORME_ADMIN_USERNAME` | 后台管理员用户名 | `admin` |
 | `SUBFORME_ADMIN_PASSWORD` | 后台管理员密码 | `123456` |
-| `SUBFORME_SESSION_SECRET` | Session 加密密钥 | - |
 | `SUBFORME_CONFIG_DIR` | 配置目录 | `/app/config` |
 | `SUBFORME_FRONTEND_DIR` | 前端静态文件目录 | `/app/web` |
 | `SUBFORME_LISTEN` | 监听地址 | `:8080` |
+
+后台登录使用服务器生成的随机 Session，有效期 30 天；退出登录会撤销当前 Session，修改密码会撤销其他 Session 并更新当前 Session。服务重启或升级后需要重新登录。旧的 `session_secret` / `SUBFORME_SESSION_SECRET` 设置不再用于鉴权，可删除。
 
 ## Nginx 反代
 

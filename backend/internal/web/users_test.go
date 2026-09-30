@@ -26,7 +26,7 @@ func (s stubUserService) PreviewUser(query string) ([]xui.Node, error) {
 
 func TestUsersSearchReturnsResults(t *testing.T) {
 	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
+		Sessions: testSessions,
 		ConfigService: stubConfigService{
 			app: config.AppConfig{Mode: "whitelist"},
 		},
@@ -54,7 +54,7 @@ func TestUsersSearchReturnsResults(t *testing.T) {
 
 func TestUsersPreviewReturnsNodes(t *testing.T) {
 	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
+		Sessions: testSessions,
 		ConfigService: stubConfigService{
 			app: config.AppConfig{Mode: "whitelist"},
 		},

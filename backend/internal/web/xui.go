@@ -39,7 +39,7 @@ type userSummaryResponse struct {
 }
 
 func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
-	mux.HandleFunc("/api/sub/preview", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/sub/preview", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		user := r.URL.Query().Get("user")
 		if user == "" {
 			http.Error(w, "missing user query", http.StatusBadRequest)
@@ -57,7 +57,7 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write(raw)
 	}))
-	mux.HandleFunc("/api/xui/test", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/xui/test", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -76,7 +76,7 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(status)
 	}))
-	mux.HandleFunc("/api/users/search", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/users/search", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if deps.UserService == nil || deps.ConfigService == nil {
 			http.Error(w, "user service unavailable", http.StatusNotImplemented)
 			return
@@ -152,7 +152,7 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(out)
 	}))
-	mux.HandleFunc("/api/users/policy", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/users/policy", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -209,7 +209,7 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	mux.HandleFunc("/api/nodes/detect", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nodes/detect", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if deps.XUIService == nil {
 			http.Error(w, "xui service unavailable", http.StatusNotImplemented)
 			return
@@ -222,7 +222,7 @@ func registerPreviewRoutes(mux *http.ServeMux, deps Dependencies) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(nodes)
 	}))
-	mux.HandleFunc("/api/users/preview", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/users/preview", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if deps.UserService == nil {
 			http.Error(w, "user service unavailable", http.StatusNotImplemented)
 			return

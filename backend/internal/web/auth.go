@@ -12,9 +12,9 @@ import (
 	"subforme/backend/internal/config"
 )
 
-func requireSession(secret string, next http.HandlerFunc) http.HandlerFunc {
+func requireSession(sessions *auth.Sessions, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !auth.HasSession(r, secret) {
+		if !sessions.Has(r) {
 			log.Printf("[auth] denied method=%s path=%s remote=%s", r.Method, safeRequestURI(r), remoteAddr(r))
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
@@ -32,40 +32,53 @@ func requireSession(secret string, next http.HandlerFunc) http.HandlerFunc {
 
 func registerAuthRoutes(mux *http.ServeMux, deps Dependencies) {
 	mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		var req auth.LoginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			log.Printf("[auth] login invalid_json remote=%s", remoteAddr(r))
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
+		deps.authMu.Lock()
+		defer deps.authMu.Unlock()
 		if deps.AuthService == nil || !deps.AuthService.Check(req.Username, req.Password) {
 			log.Printf("[auth] login failed username=%s remote=%s", req.Username, remoteAddr(r))
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 			return
 		}
-		auth.SetSession(w, deps.SessionSecret)
+		if err := deps.Sessions.Set(w, r); err != nil {
+			http.Error(w, "create session failed", http.StatusInternalServerError)
+			return
+		}
 		log.Printf("[auth] login success username=%s remote=%s", req.Username, remoteAddr(r))
 		refreshTrafficAfterLogin(deps)
 		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("/api/auth/logout", func(w http.ResponseWriter, r *http.Request) {
-		if auth.HasSession(r, deps.SessionSecret) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if deps.Sessions.Has(r) {
 			log.Printf("[auth] logout remote=%s", remoteAddr(r))
 		}
-		auth.ClearSession(w)
+		deps.Sessions.Clear(w, r)
 		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("/api/auth/me", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"authenticated":  auth.HasSession(r, deps.SessionSecret),
+			"authenticated":  deps.Sessions.Has(r),
 			"admin_username": deps.AdminUsername,
 		})
 	})
 
-	mux.HandleFunc("/api/auth/password", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/auth/password", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -81,12 +94,25 @@ func registerAuthRoutes(mux *http.ServeMux, deps Dependencies) {
 			http.Error(w, "password cannot be empty", http.StatusBadRequest)
 			return
 		}
+		deps.authMu.Lock()
+		defer deps.authMu.Unlock()
+		// Recheck after waiting: another password change may have revoked this token.
+		if !deps.Sessions.Has(r) {
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
 		if err := config.SaveRuntimePassword(deps.RuntimePath, req.Password); err != nil {
 			http.Error(w, "save password failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if deps.AuthService != nil {
 			deps.AuthService.UpdatePassword(req.Password)
+		}
+		deps.Sessions.RevokeAll()
+		if err := deps.Sessions.Set(w, r); err != nil {
+			deps.Sessions.Clear(w, r)
+			http.Error(w, "password updated; sign in again", http.StatusInternalServerError)
+			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))

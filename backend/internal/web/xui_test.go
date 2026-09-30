@@ -38,7 +38,7 @@ func (s stubXUIService) DetectAvailableNodes() ([]xui.AvailableNode, error) {
 
 func TestXUITestRouteReturnsStatus(t *testing.T) {
 	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
+		Sessions: testSessions,
 		XUIService: stubXUIService{
 			status: xui.ConnectionStatus{
 				OK:           true,

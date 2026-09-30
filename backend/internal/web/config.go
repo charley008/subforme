@@ -11,7 +11,7 @@ import (
 )
 
 func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
-	mux.HandleFunc("/api/config/app", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/config/app", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPut {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -42,7 +42,7 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		_ = json.NewEncoder(w).Encode(appConfig)
 	}))
 
-	mux.HandleFunc("/api/config/groups", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/config/groups", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if deps.ConfigService == nil {
 			http.Error(w, "config service unavailable", http.StatusNotImplemented)
 			return
@@ -72,7 +72,7 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 	}))
 
-	mux.HandleFunc("/api/config/template", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/config/template", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		section := r.URL.Query().Get("section")
 		if section == "" {
 			http.Error(w, "missing section query", http.StatusBadRequest)
@@ -107,7 +107,7 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 	}))
 
-	mux.HandleFunc("/api/nodes", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/nodes", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if deps.DBService == nil {
 			http.Error(w, "db service unavailable", http.StatusNotImplemented)
 			return
@@ -140,7 +140,7 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 	}))
 
-	mux.HandleFunc("/api/providers", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/providers", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if deps.ConfigService == nil {
 			http.Error(w, "config service unavailable", http.StatusNotImplemented)
 			return
@@ -158,7 +158,7 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		_ = json.NewEncoder(w).Encode(providers)
 	}))
 
-	mux.HandleFunc("/api/provider-converters", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/provider-converters", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if deps.ConfigService == nil {
 			http.Error(w, "config service unavailable", http.StatusNotImplemented)
 			return
@@ -190,7 +190,7 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 	}))
 
-	mux.HandleFunc("/api/provider-converters/refresh/", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/provider-converters/refresh/", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -205,7 +205,7 @@ func registerConfigRoutes(mux *http.ServeMux, deps Dependencies) {
 		_ = json.NewEncoder(w).Encode(result)
 	}))
 
-	mux.HandleFunc("/api/provider-converters/delete/", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/provider-converters/delete/", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return

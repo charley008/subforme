@@ -1,6 +1,6 @@
 package config
 
-const Version = "v1.4.2"
+const Version = "v1.4.3"
 
 type XUIConfig struct {
 	BaseURL  string `yaml:"base_url" json:"base_url"`
@@ -39,7 +39,7 @@ type RuntimeConfig struct {
 	Listen        string    `json:"listen"`
 	AdminUsername string    `json:"admin_username"`
 	AdminPassword string    `json:"admin_password"`
-	SessionSecret string    `json:"session_secret"`
+	SessionSecret string    `json:"session_secret"` // Legacy setting; random server-side sessions do not use it.
 	ConfigDir     string    `json:"config_dir"`
 	FrontendDir   string    `json:"frontend_dir"`
 	XUI           XUIConfig `json:"xui"`

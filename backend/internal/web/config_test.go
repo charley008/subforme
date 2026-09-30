@@ -78,7 +78,7 @@ func (s stubConfigService) ReadProviderFile(id string) ([]byte, error) {
 
 func TestGetAppConfigReturnsJSON(t *testing.T) {
 	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
+		Sessions: testSessions,
 		ConfigService: stubConfigService{
 			app: config.AppConfig{
 				Mode:                       "whitelist",
@@ -109,7 +109,7 @@ func TestGetAppConfigReturnsJSON(t *testing.T) {
 
 func TestGetGroupsConfigReturnsJSON(t *testing.T) {
 	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
+		Sessions: testSessions,
 		ConfigService: stubConfigService{
 			groups: config.GroupConfig{
 				GroupNames: config.GroupNames{Proxy: "节点选择", Auto: "自动选择", Other: "其他"},
@@ -135,7 +135,7 @@ func TestGetGroupsConfigReturnsJSON(t *testing.T) {
 
 func TestConfigRoutesRequireSession(t *testing.T) {
 	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
+		Sessions:      testSessions,
 		ConfigService: stubConfigService{},
 	})
 

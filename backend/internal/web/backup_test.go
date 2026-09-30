@@ -19,7 +19,7 @@ func TestBackupExportReturnsZip(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"listen":":0"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	router := NewRouter(Dependencies{SessionSecret: testSessionSecret, ConfigDir: dir})
+	router := NewRouter(Dependencies{Sessions: testSessions, ConfigDir: dir})
 	req := httptest.NewRequest(http.MethodGet, "/api/backup/export", nil)
 	addSessionCookie(req)
 	rec := httptest.NewRecorder()
@@ -66,7 +66,7 @@ func TestBackupRestoreStoresPendingArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	router := NewRouter(Dependencies{SessionSecret: testSessionSecret, ConfigDir: dir})
+	router := NewRouter(Dependencies{Sessions: testSessions, ConfigDir: dir})
 	req := httptest.NewRequest(http.MethodPost, "/api/backup/restore", &body)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	addSessionCookie(req)

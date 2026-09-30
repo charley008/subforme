@@ -19,7 +19,7 @@ const (
 )
 
 func registerBackupRoutes(mux *http.ServeMux, deps Dependencies) {
-	mux.HandleFunc("/api/backup/export", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/backup/export", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -37,7 +37,7 @@ func registerBackupRoutes(mux *http.ServeMux, deps Dependencies) {
 		}
 	}))
 
-	mux.HandleFunc("/api/backup/restore", requireSession(deps.SessionSecret, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/backup/restore", requireSession(deps.Sessions, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return

@@ -12,7 +12,6 @@ services:
       # 后台管理员账号（默认 admin / 123456，登录后可修改）
       # - SUBFORME_ADMIN_USERNAME=admin
       # - SUBFORME_ADMIN_PASSWORD=123456
-      - SUBFORME_SESSION_SECRET=change-me-too
       # 3x-ui 面板连接（API Key 方式，推荐）
       - SUBFORME_XUI_BASE_URL=https://your-panel.com/xui
       - SUBFORME_XUI_API_KEY=your-api-key-here

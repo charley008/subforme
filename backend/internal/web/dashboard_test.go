@@ -15,7 +15,7 @@ import (
 
 func TestDashboardSummaryReturnsCombinedStatus(t *testing.T) {
 	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
+		Sessions: testSessions,
 		ConfigService: stubConfigService{
 			app: config.AppConfig{
 				Mode:                       "whitelist",
@@ -66,7 +66,7 @@ func TestDashboardSummaryReturnsCombinedStatus(t *testing.T) {
 
 func TestDashboardTrafficReturnsSortedRows(t *testing.T) {
 	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
+		Sessions: testSessions,
 		DBService: stubDBService{
 			traffic: map[string][]db.ServerTraffic{
 				"light@example.com": {

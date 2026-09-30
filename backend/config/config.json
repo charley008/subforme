@@ -2,7 +2,6 @@
   "listen": ":8080",
   "admin_username": "admin",
   "admin_password": "123456",
-  "session_secret": "change-me-too",
   "config_dir": ".",
   "frontend_dir": "../web",
   "xui": {

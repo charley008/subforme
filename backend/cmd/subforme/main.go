@@ -69,7 +69,6 @@ func main() {
 		XUIService:          service,
 		UserService:         service,
 		DBService:           service,
-		SessionSecret:       runtimeConfig.SessionSecret,
 		FrontendDir:         runtimeConfig.FrontendDir,
 		AdminUsername:       runtimeConfig.AdminUsername,
 		RuntimePath:         runtimeConfig.RuntimePath,

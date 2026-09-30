@@ -51,7 +51,7 @@ func TestSubRequiresUserQuery(t *testing.T) {
 
 func TestPreviewReturnsGeneratedYAML(t *testing.T) {
 	router := NewRouter(Dependencies{
-		SessionSecret: testSessionSecret,
+		Sessions: testSessions,
 		SubscriptionService: stubSubscriptionService{
 			payload: []byte("proxies:\n  - name: HK-01\n"),
 		},

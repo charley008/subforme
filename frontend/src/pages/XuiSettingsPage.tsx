@@ -48,7 +48,7 @@ export function XuiSettingsPage() {
       await putJSON("/api/config/app", config);
       if (newPassword) {
         await putJSON("/api/auth/password", { password: newPassword });
-        showToast(`密码已更新为：${newPassword}`);
+        showToast("密码已更新，其他登录会话已退出。");
         setNewPassword("");
         setMessage("设置已保存，密码已更新。");
       } else {

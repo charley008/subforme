@@ -16,6 +16,7 @@ export function GroupsPage() {
   const [groups, setGroups] = useState<GroupDef[]>([]);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
 
   const [editingGroup, setEditingGroup] = useState<GroupDef | null>(null);
   const [draftGroup, setDraftGroup] = useState<GroupDef>({
@@ -28,22 +29,31 @@ export function GroupsPage() {
   }, []);
 
   async function loadGroups() {
+    setLoadState("loading");
     try {
       const cfg = await getJSON<{ groups: GroupDef[] }>("/api/config/groups");
       setGroups(cfg.groups || []);
-    } catch {
-      setGroups([]);
+      setLoadState("ready");
+      setMessage("");
+    } catch (error) {
+      setLoadState("error");
+      setMessage(error instanceof Error ? error.message : "加载分组失败，请重试。");
     }
   }
 
   async function persistGroups(nextGroups: GroupDef[], successMessage: string) {
+    if (loadState !== "ready" || saving) {
+      return false;
+    }
     setSaving(true);
     try {
       await putJSON("/api/config/groups", { groups: nextGroups });
       setGroups(nextGroups);
       setMessage(successMessage);
+      return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "保存失败");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -73,8 +83,9 @@ export function GroupsPage() {
       ? groups.map((group) => (group.name === editingGroup.name ? nextGroup : group))
       : [...groups, nextGroup];
 
-    resetDraft();
-    await persistGroups(nextGroups, editingGroup ? "分组已保存。" : "分组已添加。");
+    if (await persistGroups(nextGroups, editingGroup ? "分组已保存。" : "分组已添加。")) {
+      resetDraft();
+    }
   }
 
   function editGroup(group: GroupDef) {
@@ -123,7 +134,9 @@ export function GroupsPage() {
             {groups.length === 0 ? (
               <tr>
                 <td colSpan={5}>
-                  <div className="empty-state">暂无分组，请先添加。</div>
+                  <div className="empty-state">
+                    {loadState === "loading" ? "正在加载分组..." : loadState === "error" ? "加载失败，请重试。" : "暂无分组，请先添加。"}
+                  </div>
                 </td>
               </tr>
             ) : null}
@@ -137,10 +150,10 @@ export function GroupsPage() {
                 <td>{group.provider ? <span className="badge badge-warning">{group.provider}</span> : "-"}</td>
                 <td>
                   <div className="btn-group">
-                    <button className="btn btn-sm" onClick={() => editGroup(group)} disabled={saving}>
+                    <button className="btn btn-sm" onClick={() => editGroup(group)} disabled={saving || loadState !== "ready"}>
                       修改
                     </button>
-                    <button className="btn btn-sm btn-danger" onClick={() => void deleteGroup(group.name)} disabled={saving}>
+                    <button className="btn btn-sm btn-danger" onClick={() => void deleteGroup(group.name)} disabled={saving || loadState !== "ready"}>
                       删除
                     </button>
                   </div>
@@ -205,7 +218,7 @@ export function GroupsPage() {
               取消
             </button>
           ) : null}
-          <button className="btn btn-primary" onClick={() => void addOrUpdateGroup()} disabled={saving}>
+          <button className="btn btn-primary" onClick={() => void addOrUpdateGroup()} disabled={saving || loadState !== "ready"}>
             {saving ? "保存中..." : editingGroup ? "保存修改" : "添加"}
           </button>
         </div>
@@ -213,6 +226,11 @@ export function GroupsPage() {
 
       <div className="message" style={{ marginTop: 16 }}>
         {message}
+        {loadState === "error" ? (
+          <button className="btn btn-sm" onClick={() => void loadGroups()} style={{ marginLeft: 12 }}>
+            重试加载
+          </button>
+        ) : null}
       </div>
 
       <div className="message" style={{ marginTop: 8 }}>
