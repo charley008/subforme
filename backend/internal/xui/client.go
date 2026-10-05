@@ -277,6 +277,22 @@ func (c *Client) UpdateInboundWithClients(ctx context.Context, inboundID int, in
 	return c.postJSONCandidates(ctx, c.inboundActionCandidates("update/"+strconv.Itoa(inboundID)), body, "update inbound")
 }
 
+// SetInboundEnable uses the dedicated lifecycle endpoint required by 3x-ui 3.9.0.
+func (c *Client) SetInboundEnable(ctx context.Context, inboundID int, enable bool) error {
+	body, _ := json.Marshal(map[string]bool{"enable": enable})
+	return c.postJSONCandidates(ctx, c.inboundActionCandidates("setEnable/"+strconv.Itoa(inboundID)), string(body), "set inbound enable")
+}
+
+// UpdateClientInInbound limits the update to one attachment, preserving per-inbound flow.
+func (c *Client) UpdateClientInInbound(ctx context.Context, email string, inboundID int, client InboundClient) error {
+	body, _ := json.Marshal(client)
+	endpoints := c.clientActionCandidates("update/" + url.PathEscape(email))
+	for i := range endpoints {
+		endpoints[i] += "?inboundIds=" + strconv.Itoa(inboundID)
+	}
+	return c.postJSONCandidates(ctx, endpoints, string(body), "update inbound client")
+}
+
 func (c *Client) DeleteInbound(ctx context.Context, inboundID int) error {
 	return c.postJSONCandidates(ctx, c.inboundActionCandidates("del/"+strconv.Itoa(inboundID)), "", "delete inbound")
 }

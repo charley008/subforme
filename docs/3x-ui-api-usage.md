@@ -8,7 +8,7 @@
 - 请求头：所有请求都会带 `X-Requested-With: XMLHttpRequest`。
 - 默认路径：优先调用 `/panel/api/...`。
 - 兼容路径：客户端还会依次尝试 `/xui/panel/api/...`、`/api/...`，用于兼容不同 base path 或旧部署形态。
-- 超时：3x-ui 客户端默认 HTTP 超时为 15 秒；流量刷新单台面板还有额外的刷新超时控制。
+- 超时：3x-ui 客户端默认 HTTP 超时为 60 秒；流量刷新单台面板还有额外的刷新超时控制。
 
 ## 实际业务调用
 
@@ -16,11 +16,12 @@
 | --- | --- | --- | --- | --- |
 | `/panel/api/inbounds/list` | `GET` | 测试面板连接、导入主面板、同步面板、节点解析、本地 inbound 缓存 | 获取面板上的 inbound 列表、节点配置、用户挂载关系、clientStats 流量统计 | 返回结构是否仍是 `success + obj/data`；`settings`、`streamSettings`、`sniffing` 是否仍包含完整配置；`settings.clients` 是否仍可读取 |
 | `/panel/api/inbounds/add` | `POST` | 同步到非主面板 | 当目标面板缺少主面板对应 inbound 时，创建 inbound；SubForMe 会去掉 `settings.clients`，只同步 inbound 配置本身 | 请求体是否仍支持 JSON；`settings`、`streamSettings`、`sniffing` 是否仍接受嵌套 JSON 对象 |
-| `/panel/api/inbounds/update/{id}` | `POST` | 同步到非主面板 | 当目标面板已有 inbound 但配置和主面板不同，更新 inbound 配置；同样会去掉 clients | 请求体是否仍支持 JSON；更新语义是否仍是替换完整 inbound 配置 |
+| `/panel/api/inbounds/update/{id}` | `POST` | 同步到非主面板 | 当目标面板已有 inbound 但配置和主面板不同，更新 inbound 配置；同样会去掉 clients | 请求体是否仍支持 JSON；3.9.0 起不再修改 clients 和 enable |
+| `/panel/api/inbounds/setEnable/{id}` | `POST` | 同步到非主面板 | 使用 `{ "enable": true/false }` 同步入站启停状态 | 3.9.0 起必须单独调用，普通 update 忽略 enable |
 | `/panel/api/inbounds/del/{id}` | `POST` | 同步到非主面板 | 删除目标面板上主面板已经不存在的 stale inbound | 路径和空 body 调用是否仍支持 |
 | `/panel/api/clients/list` | `GET` | 流量刷新、手动/定时清零前统计、同步面板用户差异判断 | 获取全局 client 列表、每个用户挂载的 inbound IDs、用户配置、全局流量记录 | `traffic.up/down`、`inboundIds`、`email`、`enable`、`uuid/password/subId` 等字段是否还在 |
 | `/panel/api/clients/add` | `POST` | 同步到非主面板 | 在目标面板创建用户，并一次性挂载到指定 inbound IDs | 请求体 `{ client, inboundIds }` 是否仍支持；字段名是否变化 |
-| `/panel/api/clients/update/{email}` | `POST` | 同步到非主面板 | 按 email 更新目标面板用户配置，并传播到其已挂载的 inbound | email 路径参数是否仍支持；更新语义是否仍是替换完整 client |
+| `/panel/api/clients/update/{email}` | `POST` | 同步到非主面板 | 按 email 更新目标面板用户配置，通过 `?inboundIds={id}` 限定到单个入站，保留不同入站的 flow | email 路径参数是否仍支持；更新语义是否仍是替换完整 client |
 | `/panel/api/clients/del/{email}` | `POST` | 同步到非主面板 | 删除目标面板上本地已不存在或不该同步过去的用户 | 路径和删除语义是否仍支持；是否默认删除 traffic row |
 | `/panel/api/clients/{email}/attach` | `POST` | 同步到非主面板 | 把已有用户挂载到新增的 inbound IDs | 请求体 `{ inboundIds: [...] }` 是否仍支持 |
 | `/panel/api/clients/{email}/detach` | `POST` | 同步到非主面板 | 把已有用户从不再需要的 inbound IDs 解绑 | 请求体 `{ inboundIds: [...] }` 是否仍支持；解绑后 orphan client 的处理是否变化 |
@@ -70,3 +71,12 @@
 
 - 3x-ui 3.3.0 的 breaking change 是 `/panel/setting`、`/panel/xray` 移动到 `/panel/api/setting`、`/panel/api/xray`；SubForMe 当前没有调用这两组旧路径。
 - `inbounds/add` 和 `inbounds/update/{id}` 已按 3x-ui 3.3.0 OpenAPI 调整为 JSON body；同步时仍会清空 `settings.clients`，避免把主面板 inbound 内的用户列表直接复制到目标面板。
+
+## 3.9.0 适配
+
+- 用户同步不再通过 `inbounds/update` 替换 `settings.clients`，改用 `clients/add`、`attach`、限定入站的 `update/{email}?inboundIds={id}` 和 `detach`。所有期望入站都不再包含的用户使用 `clients/del/{email}` 删除。
+- 保留目标入站已有用户的 enable；已有用户挂载到新入站时保留目标面板全局 enable。新用户沿用主面板配置。
+- 先创建/挂载/更新，再解绑，避免移动用户时提前移除最后一个关联。
+- 入站 enable 使用 `inbounds/setEnable/{id}`。新增入站仍先创建空 clients，再独立同步用户。
+- 保留的 `UpdateInboundWithClients` 仅用于旧接口测试，不再用于业务同步。
+- 适配范围是现有同步功能，不增加每周续期或 excludeFromSub 等新版功能。

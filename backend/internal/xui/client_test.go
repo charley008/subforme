@@ -240,3 +240,21 @@ func TestAddInboundUsesJSONAndStripsClients(t *testing.T) {
 		t.Fatalf("expected clients to be stripped, got %#v", settings["clients"])
 	}
 }
+
+func TestSetInboundEnableV390(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/panel/api/inbounds/setEnable/7" || r.Method != http.MethodPost {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var body map[string]bool
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if value, ok := body["enable"]; !ok || value {
+			t.Errorf("expected explicit false: %v", body)
+		}
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+	if err := NewClient(server.URL, "token", "", "").SetInboundEnable(context.Background(), 7, false); err != nil {
+		t.Fatal(err)
+	}
+}

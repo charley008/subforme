@@ -1721,6 +1721,11 @@ func (s Service) syncServerInbounds(ctx context.Context, cli *xui.Client, sv db.
 			if err := cli.UpdateInbound(ctx, int(remoteInb.ID), record); err != nil {
 				return nil, err
 			}
+			if main.Enable != remoteInb.Enable {
+				if err := cli.SetInboundEnable(ctx, int(remoteInb.ID), main.Enable); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 	for key, remoteInb := range remoteByKey {
@@ -1810,30 +1815,98 @@ func sliceContains(values []string, target string) bool {
 }
 
 func syncServerInboundClients(ctx context.Context, cli *xui.Client, remoteInbounds []db.Inbound, desiredByTag map[string][]xui.InboundClient) (int, int, int, error) {
-	syncedUsers := 0
-	updatedInbounds := 0
-	deletedClients := 0
-	for _, remoteInb := range remoteInbounds {
-		tag := inboundSyncKey(remoteInb)
-		currentClients := decodeInboundClientsFromSettings(remoteInb.SettingsJSON)
-		desiredClients := preserveRemoteClientEnable(desiredByTag[tag], currentClients)
-		if sameInboundClientList(currentClients, desiredClients) {
-			syncedUsers += len(desiredClients)
-			continue
-		}
-		log.Printf("[sync] inbound clients update %s (%s): %s", remoteInb.Remark, describeInboundIdentity(remoteInb.Protocol, remoteInb.Listen, remoteInb.Port, remoteInb.Tag), describeClientListChanges(currentClients, desiredClients))
-		record := dbInboundToXUI(remoteInb)
-		record.Settings = replaceClientsInSettings(remoteInb.SettingsJSON, desiredClients)
-		if err := cli.UpdateInboundWithClients(ctx, remoteInb.InboundID, record); err != nil {
-			return syncedUsers, updatedInbounds, deletedClients, fmt.Errorf("update inbound %s clients: %w", remoteInb.Remark, err)
-		}
-		updatedInbounds++
-		syncedUsers += len(desiredClients)
-		if len(currentClients) > len(desiredClients) {
-			deletedClients += len(currentClients) - len(desiredClients)
+	syncedUsers, deletedClients := 0, 0
+	changed := map[int]bool{}
+	rows, err := cli.ListClients(ctx)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("list clients before sync: %w", err)
+	}
+	known := map[string]bool{}
+	enabled := map[string]bool{}
+	targetRecords := map[string]xui.ClientListRecord{}
+	for _, row := range rows {
+		key := strings.ToLower(row.Email)
+		known[key] = true
+		enabled[key] = row.Enable
+		targetRecords[key] = row
+	}
+	// Add/update first so moving users does not orphan them before attaching.
+	for _, inb := range remoteInbounds {
+		current := decodeInboundClientsFromSettings(inb.SettingsJSON)
+		desired := preserveRemoteClientEnable(desiredByTag[inboundSyncKey(inb)], current)
+		for _, client := range desired {
+			key := strings.ToLower(client.Email)
+			// The global update also writes these fields; preserve target-only settings.
+			if row, ok := targetRecords[key]; ok {
+				client.Group = row.Group
+				client.AdTag = row.AdTag
+				client.LimitHwid = row.LimitHwid
+			}
+			var existing *xui.InboundClient
+			for i := range current {
+				if strings.EqualFold(current[i].Email, client.Email) {
+					existing = &current[i]
+					break
+				}
+			}
+			if existing == nil {
+				if known[key] {
+					client.Enable = enabled[key]
+					if err := cli.AttachClient(ctx, client.Email, []int{inb.InboundID}); err != nil {
+						return syncedUsers, len(changed), deletedClients, fmt.Errorf("attach %s to %s: %w", client.Email, inb.Remark, err)
+					}
+				} else {
+					if err := cli.CreateClient(ctx, client, []int{inb.InboundID}); err != nil {
+						return syncedUsers, len(changed), deletedClients, fmt.Errorf("create %s on %s: %w", client.Email, inb.Remark, err)
+					}
+					known[key], enabled[key] = true, client.Enable
+				}
+			}
+			if existing == nil || !sameInboundClientList([]xui.InboundClient{*existing}, []xui.InboundClient{client}) {
+				if err := cli.UpdateClientInInbound(ctx, client.Email, inb.InboundID, client); err != nil {
+					return syncedUsers, len(changed), deletedClients, fmt.Errorf("update %s on %s: %w", client.Email, inb.Remark, err)
+				}
+				changed[inb.InboundID] = true
+			}
+			syncedUsers++
 		}
 	}
-	return syncedUsers, updatedInbounds, deletedClients, nil
+	wantedAnywhere := map[string]bool{}
+	for _, clients := range desiredByTag {
+		for _, client := range clients {
+			wantedAnywhere[strings.ToLower(client.Email)] = true
+		}
+	}
+	deleted := map[string]bool{}
+	for _, inb := range remoteInbounds {
+		desired := desiredByTag[inboundSyncKey(inb)]
+		for _, client := range decodeInboundClientsFromSettings(inb.SettingsJSON) {
+			keep := false
+			for _, wanted := range desired {
+				if strings.EqualFold(client.Email, wanted.Email) {
+					keep = true
+					break
+				}
+			}
+			if keep {
+				continue
+			}
+			key := strings.ToLower(client.Email)
+			if !wantedAnywhere[key] {
+				if !deleted[key] {
+					if err := cli.DeleteClientByEmailV2(ctx, client.Email); err != nil {
+						return syncedUsers, len(changed), deletedClients, fmt.Errorf("delete %s: %w", client.Email, err)
+					}
+					deleted[key] = true
+				}
+			} else if err := cli.DetachClient(ctx, client.Email, []int{inb.InboundID}); err != nil {
+				return syncedUsers, len(changed), deletedClients, fmt.Errorf("detach %s from %s: %w", client.Email, inb.Remark, err)
+			}
+			deletedClients++
+			changed[inb.InboundID] = true
+		}
+	}
+	return syncedUsers, len(changed), deletedClients, nil
 }
 
 func describeInboundIdentity(protocol, listen string, port int, tag string) string {

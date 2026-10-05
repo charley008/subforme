@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -279,12 +280,21 @@ func TestSyncServerInboundsReusesExistingPortWhenKeyChanged(t *testing.T) {
 
 	var addCalled atomic.Bool
 	var updateCalled atomic.Bool
+	var enableCalled atomic.Bool
 	remotePayload := `{"success":true,"obj":[{"id":2,"remark":"xhttp","enable":true,"listen":"127.0.0.1","port":6444,"protocol":"vless","settings":"{\"clients\":[],\"decryption\":\"none\"}","streamSettings":"{\"network\":\"xhttp\"}","tag":"old-xhttp"}]}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/panel/api/inbounds/list":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(remotePayload))
+		case "/panel/api/inbounds/setEnable/2":
+			var body map[string]bool
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if value, ok := body["enable"]; !ok || value {
+				t.Errorf("expected disabled inbound: %v", body)
+			}
+			enableCalled.Store(true)
+			_, _ = w.Write([]byte(`{"success":true}`))
 		case "/panel/api/inbounds/add":
 			addCalled.Store(true)
 			http.Error(w, "add should not be called", http.StatusConflict)
@@ -314,7 +324,7 @@ func TestSyncServerInboundsReusesExistingPortWhenKeyChanged(t *testing.T) {
 	main := []db.Inbound{{
 		InboundID:          7,
 		Remark:             "xhttp",
-		Enable:             true,
+		Enable:             false,
 		Listen:             "127.0.0.1",
 		Port:               6444,
 		Protocol:           "vless",
@@ -326,6 +336,9 @@ func TestSyncServerInboundsReusesExistingPortWhenKeyChanged(t *testing.T) {
 	if _, err := svc.syncServerInbounds(context.Background(), cli, db.Server{ID: 1, Name: "bwg"}, main, remote); err != nil {
 		t.Fatalf("syncServerInbounds returned error: %v", err)
 	}
+	if !enableCalled.Load() {
+		t.Fatal("sync must use the dedicated enable endpoint")
+	}
 	if addCalled.Load() {
 		t.Fatal("expected sync to reuse existing port instead of adding inbound")
 	}
@@ -335,16 +348,21 @@ func TestSyncServerInboundsReusesExistingPortWhenKeyChanged(t *testing.T) {
 }
 
 func TestSyncServerInboundClientsUsesMainInboundClientPayload(t *testing.T) {
-	var updates []xui.InboundRecord
+	var updates []xui.InboundClient
+	var updateIDs []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/panel/api/inbounds/update/11", "/panel/api/inbounds/update/12":
-			var payload xui.InboundRecord
+		case "/panel/api/clients/list":
+			_, _ = w.Write([]byte(`{"success":true,"obj":[{"email":"charley","enable":true}]}`))
+			return
+		case "/panel/api/clients/update/charley":
+			var payload xui.InboundClient
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			updates = append(updates, payload)
+			updateIDs = append(updateIDs, r.URL.Query().Get("inboundIds"))
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"success":true}`))
 		default:
@@ -402,20 +420,13 @@ func TestSyncServerInboundClientsUsesMainInboundClientPayload(t *testing.T) {
 	if len(updates) != 2 {
 		t.Fatalf("expected 2 inbound updates, got %d", len(updates))
 	}
-	got := map[int]string{}
-	for _, update := range updates {
-		settings, ok := xui.ParseInboundSettings(update.Settings)
-		if !ok || len(settings.Clients) != 1 {
-			t.Fatalf("expected one synced client in settings, got %#v", update)
-		}
-		got[update.Port] = settings.Clients[0].Flow
+	if updateIDs[0] != "11" || updateIDs[1] != "12" {
+		t.Fatalf("updates must be scoped: %v", updateIDs)
 	}
-	if got[6443] != "xtls-rprx-vision" {
-		t.Fatalf("expected reality inbound flow to be restored, got %#v", got)
+	if updates[0].Flow != "xtls-rprx-vision" || updates[1].Flow != "" {
+		t.Fatalf("per-inbound flow lost: %#v", updates)
 	}
-	if got[6444] != "" {
-		t.Fatalf("expected xhttp inbound flow to stay empty, got %#v", got)
-	}
+
 }
 
 func TestPreserveRemoteClientEnableKeepsSubPanelStatus(t *testing.T) {
@@ -826,4 +837,96 @@ func (f fakeResolver) ListAvailableNodes(ctx context.Context) ([]xui.AvailableNo
 
 func (f fakeResolver) TestConnection(ctx context.Context) (xui.ConnectionStatus, error) {
 	return f.status, f.err
+}
+
+// Model the 3.9 API: inbound updates are not available for client writes.
+func TestSyncClientsV390Lifecycle(t *testing.T) {
+	for _, reject := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reject=%v", reject), func(t *testing.T) {
+			var calls []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == "/panel/api/clients/list" {
+					_, _ = w.Write([]byte(`{"success":true,"obj":[{"email":"disabled","enable":false},{"email":"removed","enable":true}]}`))
+					return
+				}
+				calls = append(calls, r.URL.Path)
+				switch r.URL.Path {
+				case "/panel/api/clients/disabled/attach", "/panel/api/clients/add":
+					var body map[string]json.RawMessage
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Error(err)
+					}
+					if string(body["inboundIds"]) != "[12]" {
+						t.Errorf("wrong inbound IDs: %s", body["inboundIds"])
+					}
+				case "/panel/api/clients/del/removed":
+					// A user absent from every desired inbound is deleted globally.
+				case "/panel/api/clients/update/disabled", "/panel/api/clients/update/new":
+					var client xui.InboundClient
+					if err := json.NewDecoder(r.Body).Decode(&client); err != nil {
+						t.Error(err)
+					}
+					if client.Email == "disabled" && client.Enable {
+						t.Error("sync enabled a disabled target client")
+					}
+					if r.URL.Query().Get("inboundIds") != "12" {
+						t.Error("missing inbound filter")
+					}
+					if reject {
+						_, _ = w.Write([]byte(`{"success":false,"msg":"rejected"}`))
+						return
+					}
+				default:
+					t.Errorf("unexpected endpoint: %s", r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				_, _ = w.Write([]byte(`{"success":true}`))
+			}))
+			defer server.Close()
+			inb := db.Inbound{InboundID: 12, Tag: "target", SettingsJSON: `{"clients":[{"email":"removed","enable":true}]}`}
+			desired := map[string][]xui.InboundClient{"target": {{Email: "disabled", ID: "uuid-d", Enable: true}, {Email: "new", ID: "uuid-n", Enable: true}}}
+			synced, updated, deleted, err := syncServerInboundClients(context.Background(), xui.NewClient(server.URL, "token", "", ""), []db.Inbound{inb}, desired)
+			if reject {
+				if err == nil {
+					t.Fatal("API rejection must fail sync")
+				}
+				return
+			}
+			if err != nil || synced != 2 || updated != 1 || deleted != 1 {
+				t.Fatalf("unexpected result: %d %d %d %v", synced, updated, deleted, err)
+			}
+			if len(calls) != 5 || calls[0] != "/panel/api/clients/disabled/attach" || calls[4] != "/panel/api/clients/del/removed" {
+				t.Fatalf("unexpected lifecycle order: %v", calls)
+			}
+		})
+	}
+}
+
+func TestSyncClientsMovesBeforeDetach(t *testing.T) {
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/panel/api/clients/list" {
+			_, _ = w.Write([]byte(`{"success":true,"obj":[{"email":"user","enable":false}]}`))
+			return
+		}
+		calls = append(calls, r.URL.Path)
+		switch r.URL.Path {
+		case "/panel/api/clients/user/attach", "/panel/api/clients/update/user", "/panel/api/clients/user/detach":
+		default:
+			t.Errorf("unexpected endpoint: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+	remote := []db.Inbound{{InboundID: 1, Tag: "old", SettingsJSON: `{"clients":[{"email":"user","id":"uuid","enable":false}]}`}, {InboundID: 2, Tag: "new", SettingsJSON: `{"clients":[]}`}}
+	desired := map[string][]xui.InboundClient{"new": {{Email: "user", ID: "uuid", Enable: true}}}
+	_, _, _, err := syncServerInboundClients(context.Background(), xui.NewClient(server.URL, "token", "", ""), remote, desired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 3 || calls[0] != "/panel/api/clients/user/attach" || calls[2] != "/panel/api/clients/user/detach" {
+		t.Fatalf("unsafe move order: %v", calls)
+	}
 }

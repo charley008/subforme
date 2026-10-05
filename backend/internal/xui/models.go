@@ -94,6 +94,9 @@ type ClientTraffic struct {
 }
 
 type ClientListRecord struct {
+	Group      string `json:"group"`
+	AdTag      string `json:"adTag"`
+	LimitHwid  int    `json:"limitHwid"`
 	ID         int64  `json:"id"`
 	Email      string `json:"email"`
 	SubID      string `json:"subId"`
@@ -182,6 +185,9 @@ type inboundSettings struct {
 }
 
 type InboundClient struct {
+	Group      string        `json:"group,omitempty"`
+	AdTag      string        `json:"adTag,omitempty"`
+	LimitHwid  int           `json:"limitHwid,omitempty"`
 	Email      string        `json:"email"`
 	ID         string        `json:"id,omitempty"`
 	Security   string        `json:"security,omitempty"`
