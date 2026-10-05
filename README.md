@@ -204,3 +204,9 @@ subforme/
 ## License
 
 MIT
+
+### 发布版本号
+
+应用版本统一维护在 `backend/internal/config/VERSION`，格式为 `vX.Y.Z`。后端编译时嵌入此文件，界面通过 `/api/version` 显示相同版本。直接 Go 构建、Docker 构建和 GitHub 安装包均使用同一来源。
+
+升级版本时修改 VERSION、补充发布说明，再使用 VERSION 中的值创建 Git 标签。GitHub Actions 会校验标签与文件一致，不一致时停止发布。`frontend/package.json` 的版本是私有前端包版本，不用于应用发布。

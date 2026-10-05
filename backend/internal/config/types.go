@@ -1,7 +1,5 @@
 package config
 
-const Version = "v1.4.4"
-
 type XUIConfig struct {
 	BaseURL  string `yaml:"base_url" json:"base_url"`
 	APIKey   string `yaml:"api_key,omitempty" json:"api_key,omitempty"`
