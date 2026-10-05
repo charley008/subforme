@@ -930,3 +930,51 @@ func TestSyncClientsMovesBeforeDetach(t *testing.T) {
 		t.Fatalf("unsafe move order: %v", calls)
 	}
 }
+
+func TestRepeatedSyncIgnoresPanelMetadata(t *testing.T) {
+	writes := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/panel/api/clients/list" {
+			_, _ = w.Write([]byte(`{"success":true,"obj":[{"email":"user","enable":false,"group":"target-group","adTag":"target-ad","limitHwid":3}]}`))
+			return
+		}
+		writes++
+		t.Errorf("unchanged sync must not write: %s", r.URL.String())
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+	remote := []db.Inbound{
+		{InboundID: 1, Tag: "reality", SettingsJSON: `{"clients":[{"email":"user","id":"uuid","flow":"xtls-rprx-vision","enable":false,"created_at":100,"updated_at":200}]}`},
+		{InboundID: 2, Tag: "xhttp", SettingsJSON: `{"clients":[{"email":"user","id":"uuid","enable":false,"created_at":300,"updated_at":400}]}`},
+	}
+	desired := map[string][]xui.InboundClient{
+		"reality": {{Email: "user", ID: "uuid", Flow: "xtls-rprx-vision", Enable: true, CreatedAt: 10, UpdatedAt: 20}},
+		"xhttp":   {{Email: "user", ID: "uuid", Enable: true, CreatedAt: 10, UpdatedAt: 20}},
+	}
+	for i := 0; i < 3; i++ {
+		_, updated, deleted, err := syncServerInboundClients(context.Background(), xui.NewClient(server.URL, "token", "", ""), remote, desired)
+		if err != nil || updated != 0 || deleted != 0 {
+			t.Fatalf("repeat %d: updated=%d deleted=%d err=%v", i, updated, deleted, err)
+		}
+	}
+	if writes != 0 {
+		t.Fatalf("unexpected writes: %d", writes)
+	}
+}
+
+func TestSyncedClientComparisonStillDetectsChanges(t *testing.T) {
+	original := xui.InboundClient{Email: "user", ID: "uuid", Flow: "xtls-rprx-vision", Enable: false}
+	for _, change := range []func(*xui.InboundClient){
+		func(c *xui.InboundClient) { c.ID = "new-uuid" },
+		func(c *xui.InboundClient) { c.Flow = "" },
+		func(c *xui.InboundClient) { c.TotalGB = 100 },
+		func(c *xui.InboundClient) { c.ExpiryTime = 100 },
+		func(c *xui.InboundClient) { c.Password = "new-password" },
+	} {
+		desired := original
+		change(&desired)
+		if sameSyncedInboundClient(original, desired) {
+			t.Fatalf("missed actual change: %#v", desired)
+		}
+	}
+}

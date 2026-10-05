@@ -1862,7 +1862,7 @@ func syncServerInboundClients(ctx context.Context, cli *xui.Client, remoteInboun
 					known[key], enabled[key] = true, client.Enable
 				}
 			}
-			if existing == nil || !sameInboundClientList([]xui.InboundClient{*existing}, []xui.InboundClient{client}) {
+			if existing == nil || !sameSyncedInboundClient(*existing, client) {
 				if err := cli.UpdateClientInInbound(ctx, client.Email, inb.InboundID, client); err != nil {
 					return syncedUsers, len(changed), deletedClients, fmt.Errorf("update %s on %s: %w", client.Email, inb.Remark, err)
 				}
@@ -2118,6 +2118,17 @@ func sameClient(a, b xui.InboundClient) bool {
 		return true
 	}
 	return false
+}
+
+// Compare only fields owned by synchronization. Each panel owns its timestamps,
+// and target-only settings come from the global registry rather than the attachment.
+func sameSyncedInboundClient(current, desired xui.InboundClient) bool {
+	normalize := func(client xui.InboundClient) xui.InboundClient {
+		client.CreatedAt, client.UpdatedAt = 0, 0
+		client.Group, client.AdTag, client.LimitHwid = "", "", 0
+		return client
+	}
+	return sameInboundClientList([]xui.InboundClient{normalize(current)}, []xui.InboundClient{normalize(desired)})
 }
 
 func sameInboundClientList(current, desired []xui.InboundClient) bool {
