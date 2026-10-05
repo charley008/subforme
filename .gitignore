@@ -9,3 +9,7 @@ PROJECT_LOG.md
 .superpowers/
 .DS_Store
 Thumbs.db
+
+# Local agent instructions and working decisions
+/AGENTS.md
+/DECISIONS.md
