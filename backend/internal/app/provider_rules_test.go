@@ -62,6 +62,9 @@ func TestGenerateProviderRulesAfterTemplateMerge(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if strings.HasPrefix(string(raw), "# 配置警告") {
+				t.Fatalf("valid subscription produced warnings:\n%s", raw)
+			}
 			var doc struct {
 				Rules     []string       `yaml:"rules"`
 				Providers map[string]any `yaml:"proxy-providers"`

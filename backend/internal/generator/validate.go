@@ -83,6 +83,10 @@ func ValidateConfig(raw []byte) ValidationError {
 			continue
 		}
 		target := parts[len(parts)-1]
+		// no-resolve is an optional rule parameter, not the policy target.
+		if len(parts) > 3 && target == "no-resolve" {
+			target = parts[len(parts)-2]
+		}
 		if target == "DIRECT" || target == "REJECT" || target == "PASS" {
 			continue
 		}
