@@ -139,29 +139,34 @@ server {
 
 ```yaml
 rules:
-  # @provider:home-wg
-  - IP-CIDR,192.168.1.0/24,家庭-WireGuard,no-resolve
+  # @provider:home
+  - IP-CIDR,192.168.1.4/32,家庭-WireGuard,no-resolve
 
-  # @provider:office-wg
-  - IP-CIDR,10.10.0.0/16,办公室-WireGuard,no-resolve
+  # @provider:office
+  - IP-CIDR,192.168.1.4/32,办公室-WireGuard,no-resolve
 
   - GEOIP,CN,DIRECT
 ```
 
-标记使用现有 Provider 的 **ID**（不是显示名称或代理组名称）。只有订阅地址带有 `mode=wg`，且当前用户已分配、对应 Provider 仍存在时，才生成标记后的规则；否则整条规则跳过。满足条件时输出正常规则，移除标记注释。
+标记使用现有第三方 Provider 的 **ID**（不是显示名称或代理组名称）。订阅地址的 `mode` 必须与标记中的 ID 相同，且当前用户已分配、对应 Provider 仍存在时，才生成标记后的规则；否则整条规则跳过。满足条件时输出正常规则，移除标记注释。规则末尾仍填写实际代理组名，可与 Provider ID 不同。
 
 ```text
 # 普通订阅：跳过所有带 @provider: 标记的规则，保留普通规则
 https://example.com/api/sub?user=charley
 
-# WG 订阅：按当前用户的 Provider 分配生成条件规则
-https://example.com/api/sub?user=charley&mode=wg
+# 访问家里：仅生成 @provider:home 的条件规则
+https://example.com/api/sub?user=charley&mode=home
 
-# iOS 模板也支持同一开关
-https://example.com/api/sub?user=charley&type=ios&mode=wg
+# 访问公司：仅生成 @provider:office 的条件规则
+https://example.com/api/sub?user=charley&mode=office
+
+# iOS 模板也支持按 Provider ID 筛选
+https://example.com/api/sub?user=charley&type=ios&mode=office
 ```
 
-`mode` 仅支持省略、空值或 `wg`（忽略大小写及首尾空格），不改变用户原有的白名单/黑名单模式，也不改变 Provider、代理组及节点的生成。已有条件规则的订阅升级后需添加 `&mode=wg` 才继续生成这些规则。可分别保存普通和 WG 两份客户端配置，按所在网络切换；该参数不会自动识别当前网络。
+`mode` 去除首尾空格后按 Provider ID 精确匹配，区分大小写。省略、空值、未知 ID 或未分配的 Provider 都只跳过条件规则，普通订阅仍正常生成。每次选择一个 Provider，不改变用户原有的白名单/黑名单模式，也不改变 Provider、代理组及节点的生成。
+
+`wg` 不再是特殊开关。原来使用 `mode=wg` 的订阅需要改为实际 Provider ID（例如 `mode=home`）；只有 ID 本身就是 `wg` 时才继续填写 `mode=wg`。可分别保存普通、家庭、公司等客户端配置，按所在网络切换；该参数不会自动识别当前网络。
 
 每个标记仅作用于紧随其后的一条规则，多条规则需要分别添加标记。没有标记的规则保持原有行为。此用法适用于白名单、黑名单和 iOS 规则模板，无需新增用户配置或数据库表。
 

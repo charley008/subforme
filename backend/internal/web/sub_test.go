@@ -58,9 +58,11 @@ func TestSubAndPreviewPassSubscriptionOptions(t *testing.T) {
 			want  app.SubscriptionOptions
 		}{
 			{query: ""},
-			{query: "&mode=wg", want: app.SubscriptionOptions{Mode: "wg"}},
+			{query: "&mode=home", want: app.SubscriptionOptions{Mode: "home"}},
+			{query: "&mode=office", want: app.SubscriptionOptions{Mode: "office"}},
+			{query: "&mode=Home", want: app.SubscriptionOptions{Mode: "Home"}},
 			{query: "&type=ios", want: app.SubscriptionOptions{Variant: "ios"}},
-			{query: "&type=ios&mode=wg", want: app.SubscriptionOptions{Variant: "ios", Mode: "wg"}},
+			{query: "&type=ios&mode=office", want: app.SubscriptionOptions{Variant: "ios", Mode: "office"}},
 		} {
 			t.Run(path+tt.query, func(t *testing.T) {
 				svc := &stubOptionsSubscriptionService{stubVariantSubscriptionService: stubVariantSubscriptionService{payload: []byte("rules: []\n")}}

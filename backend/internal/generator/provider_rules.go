@@ -10,8 +10,8 @@ import (
 )
 
 // filterProviderRules applies standalone @provider comments to the following
-// rule only. Conditional rules require explicit opt-in and an assigned provider.
-func filterProviderRules(doc *yaml.Node, selected map[string]config.ProviderAddon, enabled bool) {
+// rule only. The requested provider ID must match the directive and be assigned.
+func filterProviderRules(doc *yaml.Node, selected map[string]config.ProviderAddon, providerRuleID string) {
 	rules, _, err := yamlx.GetMappingValue(doc, "rules")
 	if err != nil || rules == nil || rules.Kind != yaml.SequenceNode {
 		return
@@ -32,7 +32,7 @@ func filterProviderRules(doc *yaml.Node, selected map[string]config.ProviderAddo
 				continue
 			}
 			id := strings.TrimSpace(strings.TrimPrefix(text, "@provider:"))
-			if _, ok := selected[id]; !enabled || !ok {
+			if _, ok := selected[id]; providerRuleID == "" || providerRuleID != id || !ok {
 				keep = false
 			}
 		}

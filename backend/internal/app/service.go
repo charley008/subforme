@@ -75,10 +75,7 @@ func (s Service) GenerateWithBaseURLAndVariant(user, publicBaseURL, variant stri
 }
 
 func (s Service) GenerateWithOptions(user, publicBaseURL string, options SubscriptionOptions) ([]byte, error) {
-	requestMode := strings.ToLower(strings.TrimSpace(options.Mode))
-	if requestMode != "" && requestMode != "wg" {
-		return nil, fmt.Errorf("unsupported subscription mode %q", options.Mode)
-	}
+	providerRuleID := strings.TrimSpace(options.Mode)
 
 	bundle, err := s.loadBundle()
 	if err != nil {
@@ -124,7 +121,7 @@ func (s Service) GenerateWithOptions(user, publicBaseURL string, options Subscri
 	}
 
 	groupList := groups.Build(bundle.Groups, nodes, bundle.App.UserGroupNodes[user], bundle.App.UserGroupModes[user], bundle.App.UserProviders[user])
-	raw, err := generator.BuildFinalYAML(templateRaw, nodes, groupList, providers, bundle.App.UserProviders[user], mainProxyGroupName(bundle.Groups, groupList), requestMode == "wg")
+	raw, err := generator.BuildFinalYAML(templateRaw, nodes, groupList, providers, bundle.App.UserProviders[user], mainProxyGroupName(bundle.Groups, groupList), providerRuleID)
 	if err != nil {
 		return nil, fmt.Errorf("build final yaml: %w", err)
 	}

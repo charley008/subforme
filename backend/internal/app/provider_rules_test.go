@@ -13,26 +13,27 @@ import (
 
 func TestGenerateProviderRulesAfterTemplateMerge(t *testing.T) {
 	dir := t.TempDir()
-	const home = "IP-CIDR,192.168.1.0/24,家庭-WireGuard,no-resolve"
-	const office = "IP-CIDR,10.10.0.0/16,办公室-WireGuard,no-resolve"
+	const home = "IP-CIDR,192.168.1.4/32,家庭-WireGuard,no-resolve"
+	const office = "IP-CIDR,192.168.1.4/32,办公室-WireGuard,no-resolve"
 	const ordinary = "GEOIP,CN,DIRECT"
-	template := "rules:\n  # @provider:home-wg\n  - " + home + "\n\n  # @provider:office-wg\n  - " + office + "\n\n  - " + ordinary + "\n"
+	template := "rules:\n  # @provider:home\n  - " + home + "\n\n  # @provider:office\n  - " + office + "\n\n  - " + ordinary + "\n"
 	for _, section := range []string{"whitelist", "blacklist", "ios"} {
 		if err := config.SaveTemplateSectionYAML(dir, section, template); err != nil {
 			t.Fatal(err)
 		}
 	}
 	addons := []config.ProviderAddon{
-		{ID: "home-wg", ProxyProviders: map[string]any{"home-wg": map[string]any{"type": "http"}}, ProxyGroups: []map[string]any{{"name": "家庭-WireGuard", "type": "select", "use": []string{"home-wg"}}}},
-		{ID: "office-wg", ProxyProviders: map[string]any{"office-wg": map[string]any{"type": "http"}}, ProxyGroups: []map[string]any{{"name": "办公室-WireGuard", "type": "select", "use": []string{"office-wg"}}}},
+		{ID: "home", ProxyProviders: map[string]any{"home": map[string]any{"type": "http"}}, ProxyGroups: []map[string]any{{"name": "家庭-WireGuard", "type": "select", "use": []string{"home"}}}},
+		{ID: "office", ProxyProviders: map[string]any{"office": map[string]any{"type": "http"}}, ProxyGroups: []map[string]any{{"name": "办公室-WireGuard", "type": "select", "use": []string{"office"}}}},
 	}
 	if err := config.SaveProviders(dir, addons); err != nil {
 		t.Fatal(err)
 	}
 	svc := NewService(dir, config.XUIConfig{})
+	assignments := map[string][]string{"alice": {"home"}, "bob": {"office"}, "both": {"home", "office"}}
 	svc.Loader = func(string) (config.Bundle, error) {
 		return config.Bundle{App: config.AppConfig{
-			UserProviders: map[string][]string{"alice": {"home-wg"}, "bob": {"office-wg"}},
+			UserProviders: assignments,
 			UserModes:     map[string]string{"bob": "blacklist"},
 		}}, nil
 	}
@@ -48,14 +49,23 @@ func TestGenerateProviderRulesAfterTemplateMerge(t *testing.T) {
 		{user: "alice", want: []string{ordinary}},
 		{user: "bob", want: []string{ordinary}},
 		{user: "charlie", want: []string{ordinary}},
-		{user: "alice", mode: "wg", want: []string{home, ordinary}},
-		{user: "bob", mode: "wg", want: []string{office, ordinary}},
-		{user: "charlie", mode: "wg", want: []string{ordinary}},
-		{user: "alice", mode: " WG ", want: []string{home, ordinary}},
+		{user: "alice", mode: "home", want: []string{home, ordinary}},
+		{user: "bob", mode: "office", want: []string{office, ordinary}},
+		{user: "charlie", mode: "home", want: []string{ordinary}},
+		{user: "alice", mode: "office", want: []string{ordinary}},
+		{user: "alice", mode: " home ", want: []string{home, ordinary}},
+		{user: "both", want: []string{ordinary}},
+		{user: "both", mode: "home", want: []string{home, ordinary}},
+		{user: "both", mode: "office", want: []string{office, ordinary}},
+		{user: "both", mode: "unknown", want: []string{ordinary}},
+		{user: "both", mode: "wg", want: []string{ordinary}},
+		{user: "both", mode: "HOME", want: []string{ordinary}},
+		{user: "both", mode: "家庭-WireGuard", want: []string{ordinary}},
 		{user: "alice", variant: "ios", want: []string{ordinary}},
 		{user: "charlie", variant: "ios", want: []string{ordinary}},
-		{user: "alice", variant: "ios", mode: "wg", want: []string{home, ordinary}},
-		{user: "charlie", variant: "ios", mode: "wg", want: []string{ordinary}},
+		{user: "both", variant: "ios", mode: "home", want: []string{home, ordinary}},
+		{user: "both", variant: "ios", mode: "office", want: []string{office, ordinary}},
+		{user: "charlie", variant: "ios", mode: "home", want: []string{ordinary}},
 	} {
 		t.Run(tt.user+"/"+tt.variant+"/"+tt.mode, func(t *testing.T) {
 			raw, err := svc.GenerateWithOptions(tt.user, "", SubscriptionOptions{Variant: tt.variant, Mode: tt.mode})
@@ -85,29 +95,27 @@ func TestGenerateProviderRulesAfterTemplateMerge(t *testing.T) {
 			if len(doc.Proxies) != 1 || doc.Proxies[0].Name != "node-a" {
 				t.Fatalf("3x-ui node changed: %+v", doc.Proxies)
 			}
-			wantProvider, wantGroup := "", ""
-			switch tt.user {
-			case "alice":
-				wantProvider, wantGroup = "home-wg", "家庭-WireGuard"
-			case "bob":
-				wantProvider, wantGroup = "office-wg", "办公室-WireGuard"
+			wantProviders := map[string]bool{}
+			for _, id := range assignments[tt.user] {
+				wantProviders[id] = true
 			}
 			for _, addon := range addons {
-				if _, ok := doc.Providers[addon.ID]; ok != (addon.ID == wantProvider) {
+				if _, ok := doc.Providers[addon.ID]; ok != wantProviders[addon.ID] {
 					t.Fatalf("unexpected provider selection: %#v", doc.Providers)
 				}
 			}
-			foundGroup := false
+			foundGroups := map[string]bool{}
 			for _, group := range doc.Groups {
 				if len(group.Use) == 0 {
 					continue
 				}
-				if group.Name != wantGroup || !reflect.DeepEqual(group.Use, []string{wantProvider}) {
+				expectedNames := map[string]string{"home": "家庭-WireGuard", "office": "办公室-WireGuard"}
+				if len(group.Use) != 1 || !wantProviders[group.Use[0]] || group.Name != expectedNames[group.Use[0]] {
 					t.Fatalf("unexpected provider group: %+v", group)
 				}
-				foundGroup = true
+				foundGroups[group.Use[0]] = true
 			}
-			if foundGroup != (wantProvider != "") {
+			if !reflect.DeepEqual(foundGroups, wantProviders) {
 				t.Fatalf("provider group missing or leaked: %+v", doc.Groups)
 			}
 			if strings.Contains(string(raw), "@provider:") {
@@ -129,12 +137,5 @@ func TestGenerateProviderRulesAfterTemplateMerge(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestGenerateRejectsUnknownSubscriptionMode(t *testing.T) {
-	_, err := (Service{}).GenerateWithOptions("alice", "", SubscriptionOptions{Mode: "unknown"})
-	if err == nil || !strings.Contains(err.Error(), "unsupported subscription mode") {
-		t.Fatalf("expected unsupported mode error, got %v", err)
 	}
 }

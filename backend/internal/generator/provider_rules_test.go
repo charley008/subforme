@@ -23,19 +23,24 @@ func TestBuildFinalYAMLProviderRules(t *testing.T) {
 		name     string
 		selected []string
 		addons   []config.ProviderAddon
-		disabled bool
+		mode     string
 		want     []string
 	}{
-		{name: "home only", selected: []string{"home-wg"}, addons: addons, want: []string{home, ordinary}},
-		{name: "office only", selected: []string{"office-wg"}, addons: addons, want: []string{office, ordinary}},
-		{name: "both", selected: []string{"home-wg", "office-wg"}, addons: addons, want: []string{home, office, ordinary}},
-		{name: "none", addons: addons, want: []string{ordinary}},
-		{name: "deleted provider", selected: []string{"home-wg"}, want: []string{ordinary}},
-		{name: "display name is not ID", selected: []string{"家庭-WireGuard"}, addons: addons, want: []string{ordinary}},
-		{name: "default mode skips assigned provider rules", selected: []string{"home-wg", "office-wg"}, addons: addons, disabled: true, want: []string{ordinary}},
+		{name: "home only", mode: "home-wg", selected: []string{"home-wg"}, addons: addons, want: []string{home, ordinary}},
+		{name: "office only", mode: "office-wg", selected: []string{"office-wg"}, addons: addons, want: []string{office, ordinary}},
+		{name: "both assigned select home", mode: "home-wg", selected: []string{"home-wg", "office-wg"}, addons: addons, want: []string{home, ordinary}},
+		{name: "both assigned select office", mode: "office-wg", selected: []string{"home-wg", "office-wg"}, addons: addons, want: []string{office, ordinary}},
+		{name: "none", mode: "home-wg", addons: addons, want: []string{ordinary}},
+		{name: "other provider assigned", mode: "office-wg", selected: []string{"home-wg"}, addons: addons, want: []string{ordinary}},
+		{name: "deleted provider", mode: "home-wg", selected: []string{"home-wg"}, want: []string{ordinary}},
+		{name: "display name is not ID", mode: "家庭-WireGuard", selected: []string{"home-wg"}, addons: addons, want: []string{ordinary}},
+		{name: "default mode skips assigned provider rules", selected: []string{"home-wg", "office-wg"}, addons: addons, want: []string{ordinary}},
+		{name: "unknown ID", mode: "unknown", selected: []string{"home-wg", "office-wg"}, addons: addons, want: []string{ordinary}},
+		{name: "wg is not a wildcard", mode: "wg", selected: []string{"home-wg", "office-wg"}, addons: addons, want: []string{ordinary}},
+		{name: "IDs are case sensitive", mode: "HOME-WG", selected: []string{"home-wg"}, addons: addons, want: []string{ordinary}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := BuildFinalYAML(template, nil, nil, tt.addons, tt.selected, "", !tt.disabled)
+			raw, err := BuildFinalYAML(template, nil, nil, tt.addons, tt.selected, "", tt.mode)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -62,7 +67,7 @@ func TestBuildFinalYAMLProviderRuleBoundaries(t *testing.T) {
 		{name: "inline comment unaffected", template: "rules:\n  - MATCH,DIRECT # @provider:home-wg\n", want: []string{"MATCH,DIRECT"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := BuildFinalYAML(tt.template, nil, nil, []config.ProviderAddon{{ID: "home-wg"}}, tt.selected, "", true)
+			raw, err := BuildFinalYAML(tt.template, nil, nil, []config.ProviderAddon{{ID: "home-wg"}}, tt.selected, "", "home-wg")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -70,6 +75,21 @@ func TestBuildFinalYAMLProviderRuleBoundaries(t *testing.T) {
 			if tt.name == "other sections unaffected" && !strings.Contains(string(raw), "# @provider:home-wg") {
 				t.Fatalf("comment outside rules was changed:\n%s", raw)
 			}
+		})
+	}
+}
+
+func TestBuildFinalYAMLMatchesProviderIDVerbatim(t *testing.T) {
+	for _, id := range []string{"wg", "Home"} {
+		t.Run(id, func(t *testing.T) {
+			const conditional = "DOMAIN,example.com,DIRECT"
+			const ordinary = "MATCH,DIRECT"
+			template := "rules:\n  # @provider:" + id + "\n  - " + conditional + "\n  - " + ordinary + "\n"
+			raw, err := BuildFinalYAML(template, nil, nil, []config.ProviderAddon{{ID: id}}, []string{id}, "", id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertProviderRules(t, raw, []string{conditional, ordinary})
 		})
 	}
 }
