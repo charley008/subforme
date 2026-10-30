@@ -23,6 +23,7 @@ func TestBuildFinalYAMLProviderRules(t *testing.T) {
 		name     string
 		selected []string
 		addons   []config.ProviderAddon
+		disabled bool
 		want     []string
 	}{
 		{name: "home only", selected: []string{"home-wg"}, addons: addons, want: []string{home, ordinary}},
@@ -31,9 +32,10 @@ func TestBuildFinalYAMLProviderRules(t *testing.T) {
 		{name: "none", addons: addons, want: []string{ordinary}},
 		{name: "deleted provider", selected: []string{"home-wg"}, want: []string{ordinary}},
 		{name: "display name is not ID", selected: []string{"家庭-WireGuard"}, addons: addons, want: []string{ordinary}},
+		{name: "default mode skips assigned provider rules", selected: []string{"home-wg", "office-wg"}, addons: addons, disabled: true, want: []string{ordinary}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := BuildFinalYAML(template, nil, nil, tt.addons, tt.selected, "")
+			raw, err := BuildFinalYAML(template, nil, nil, tt.addons, tt.selected, "", !tt.disabled)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -60,7 +62,7 @@ func TestBuildFinalYAMLProviderRuleBoundaries(t *testing.T) {
 		{name: "inline comment unaffected", template: "rules:\n  - MATCH,DIRECT # @provider:home-wg\n", want: []string{"MATCH,DIRECT"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := BuildFinalYAML(tt.template, nil, nil, []config.ProviderAddon{{ID: "home-wg"}}, tt.selected, "")
+			raw, err := BuildFinalYAML(tt.template, nil, nil, []config.ProviderAddon{{ID: "home-wg"}}, tt.selected, "", true)
 			if err != nil {
 				t.Fatal(err)
 			}

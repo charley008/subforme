@@ -42,16 +42,23 @@ func TestGenerateProviderRulesAfterTemplateMerge(t *testing.T) {
 	for _, tt := range []struct {
 		user    string
 		variant string
+		mode    string
 		want    []string
 	}{
-		{user: "alice", want: []string{home, ordinary}},
-		{user: "bob", want: []string{office, ordinary}},
+		{user: "alice", want: []string{ordinary}},
+		{user: "bob", want: []string{ordinary}},
 		{user: "charlie", want: []string{ordinary}},
-		{user: "alice", variant: "ios", want: []string{home, ordinary}},
+		{user: "alice", mode: "wg", want: []string{home, ordinary}},
+		{user: "bob", mode: "wg", want: []string{office, ordinary}},
+		{user: "charlie", mode: "wg", want: []string{ordinary}},
+		{user: "alice", mode: " WG ", want: []string{home, ordinary}},
+		{user: "alice", variant: "ios", want: []string{ordinary}},
 		{user: "charlie", variant: "ios", want: []string{ordinary}},
+		{user: "alice", variant: "ios", mode: "wg", want: []string{home, ordinary}},
+		{user: "charlie", variant: "ios", mode: "wg", want: []string{ordinary}},
 	} {
-		t.Run(tt.user+"/"+tt.variant, func(t *testing.T) {
-			raw, err := svc.GenerateWithBaseURLAndVariant(tt.user, "", tt.variant)
+		t.Run(tt.user+"/"+tt.variant+"/"+tt.mode, func(t *testing.T) {
+			raw, err := svc.GenerateWithOptions(tt.user, "", SubscriptionOptions{Variant: tt.variant, Mode: tt.mode})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -103,6 +110,28 @@ func TestGenerateProviderRulesAfterTemplateMerge(t *testing.T) {
 			if strings.Contains(string(raw), "@provider:") {
 				t.Fatalf("directive leaked into subscription:\n%s", raw)
 			}
+			if tt.mode == "" {
+				legacy, err := svc.GenerateWithBaseURLAndVariant(tt.user, "", tt.variant)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var legacyDoc struct {
+					Rules []string `yaml:"rules"`
+				}
+				if err := yaml.Unmarshal(legacy, &legacyDoc); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(legacyDoc.Rules, tt.want) {
+					t.Fatalf("default generation enabled conditional rules: %#v", legacyDoc.Rules)
+				}
+			}
 		})
+	}
+}
+
+func TestGenerateRejectsUnknownSubscriptionMode(t *testing.T) {
+	_, err := (Service{}).GenerateWithOptions("alice", "", SubscriptionOptions{Mode: "unknown"})
+	if err == nil || !strings.Contains(err.Error(), "unsupported subscription mode") {
+		t.Fatalf("expected unsupported mode error, got %v", err)
 	}
 }

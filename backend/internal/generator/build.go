@@ -22,7 +22,7 @@ type groupEntry struct {
 	Use      []string `yaml:"use,omitempty"`
 }
 
-func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.ProxyGroup, addons []config.ProviderAddon, selectedProviders []string, mainGroupName string) ([]byte, error) {
+func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.ProxyGroup, addons []config.ProviderAddon, selectedProviders []string, mainGroupName string, enableProviderRules bool) ([]byte, error) {
 	doc, err := yamlx.Parse(templateRaw)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 			}
 		}
 	}
-	filterProviderRules(doc, selectedSet)
+	filterProviderRules(doc, selectedSet, enableProviderRules)
 
 	groupEntries := convertGroups(groupList)
 	for _, addon := range selectedSet {

@@ -27,7 +27,7 @@ rules:
 		{Name: "节点选择", Type: "select", Proxies: []string{"HK-01"}},
 	}
 
-	raw, err := BuildFinalYAML(template, nodes, groupList, nil, nil, "节点选择")
+	raw, err := BuildFinalYAML(template, nodes, groupList, nil, nil, "节点选择", false)
 	if err != nil {
 		t.Fatalf("BuildFinalYAML returned error: %v", err)
 	}
@@ -66,7 +66,7 @@ rules:
 		},
 	}
 
-	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "")
+	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("BuildFinalYAML returned error: %v", err)
 	}
@@ -114,7 +114,7 @@ rules:
 		},
 	}
 
-	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "")
+	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("BuildFinalYAML returned error: %v", err)
 	}
@@ -150,7 +150,7 @@ rules:
 		{Name: "ss", Type: "shadowsocks", Server: "ss.example.com", Port: 8388, Password: "pass-2"},
 	}
 
-	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "")
+	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("BuildFinalYAML returned error: %v", err)
 	}
@@ -182,7 +182,7 @@ rules:
 		{Name: "vision", Type: "vless", Server: "vision.example.com", Port: 443, UUID: "uuid-1", Network: "raw", TLS: true, Flow: "xtls-rprx-vision"},
 	}
 
-	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "")
+	raw, err := BuildFinalYAML(template, nodes, nil, nil, nil, "", false)
 	if err != nil {
 		t.Fatalf("BuildFinalYAML returned error: %v", err)
 	}
@@ -226,7 +226,7 @@ rules:
 		},
 	}
 
-	raw, err := BuildFinalYAML(template, nil, groupList, addons, []string{"provider-main"}, "PROXY")
+	raw, err := BuildFinalYAML(template, nil, groupList, addons, []string{"provider-main"}, "PROXY", false)
 	if err != nil {
 		t.Fatalf("BuildFinalYAML returned error: %v", err)
 	}
@@ -258,7 +258,7 @@ rules:
 		{ID: "airport", Name: "airport", ProxyProviders: map[string]any{"airport": map[string]any{"type": "http"}}},
 	}
 
-	raw, err := BuildFinalYAML(template, nil, groupList, addons, []string{"airport"}, "PROXY")
+	raw, err := BuildFinalYAML(template, nil, groupList, addons, []string{"airport"}, "PROXY", false)
 	if err != nil {
 		t.Fatalf("BuildFinalYAML returned error: %v", err)
 	}
@@ -287,7 +287,7 @@ rules:
 		{ID: "test", Name: "test", ProxyProviders: map[string]any{"test": map[string]any{"type": "http"}}},
 	}
 
-	raw, err := BuildFinalYAML(template, nil, groupList, addons, []string{"test"}, "PROXY")
+	raw, err := BuildFinalYAML(template, nil, groupList, addons, []string{"test"}, "PROXY", false)
 	if err != nil {
 		t.Fatalf("BuildFinalYAML returned error: %v", err)
 	}
@@ -318,7 +318,7 @@ rules:
 		{ID: "111", Name: "111", ProxyProviders: map[string]any{"111": map[string]any{"type": "http"}}},
 	}
 
-	raw, err := BuildFinalYAML(template, nil, groupList, addons, []string{"111"}, "PROXY")
+	raw, err := BuildFinalYAML(template, nil, groupList, addons, []string{"111"}, "PROXY", false)
 	if err != nil {
 		t.Fatalf("BuildFinalYAML returned error: %v", err)
 	}

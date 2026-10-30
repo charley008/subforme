@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"subforme/backend/internal/app"
 )
 
 func registerPublicRoutes(mux *http.ServeMux, deps Dependencies) {
@@ -58,6 +60,12 @@ func registerPublicRoutes(mux *http.ServeMux, deps Dependencies) {
 
 func generateForRequest(service SubscriptionService, r *http.Request, user string) ([]byte, error) {
 	variant := subscriptionVariantFromRequest(r)
+	if svc, ok := service.(OptionsSubscriptionService); ok {
+		return svc.GenerateWithOptions(user, publicBaseURLForRequest(r), app.SubscriptionOptions{
+			Variant: variant,
+			Mode:    strings.TrimSpace(r.URL.Query().Get("mode")),
+		})
+	}
 	if svc, ok := service.(VariantSubscriptionService); ok {
 		return svc.GenerateWithBaseURLAndVariant(user, publicBaseURLForRequest(r), variant)
 	}

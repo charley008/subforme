@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"subforme/backend/internal/app"
 	"subforme/backend/internal/config"
 )
 
@@ -35,6 +36,50 @@ func (s *stubVariantSubscriptionService) GenerateWithBaseURLAndVariant(user, pub
 	s.user = user
 	s.variant = variant
 	return s.payload, s.err
+}
+
+type stubOptionsSubscriptionService struct {
+	stubVariantSubscriptionService
+	options app.SubscriptionOptions
+	baseURL string
+}
+
+func (s *stubOptionsSubscriptionService) GenerateWithOptions(user, publicBaseURL string, options app.SubscriptionOptions) ([]byte, error) {
+	s.user = user
+	s.options = options
+	s.baseURL = publicBaseURL
+	return s.payload, s.err
+}
+
+func TestSubAndPreviewPassSubscriptionOptions(t *testing.T) {
+	for _, path := range []string{"/api/sub", "/api/sub/preview"} {
+		for _, tt := range []struct {
+			query string
+			want  app.SubscriptionOptions
+		}{
+			{query: ""},
+			{query: "&mode=wg", want: app.SubscriptionOptions{Mode: "wg"}},
+			{query: "&type=ios", want: app.SubscriptionOptions{Variant: "ios"}},
+			{query: "&type=ios&mode=wg", want: app.SubscriptionOptions{Variant: "ios", Mode: "wg"}},
+		} {
+			t.Run(path+tt.query, func(t *testing.T) {
+				svc := &stubOptionsSubscriptionService{stubVariantSubscriptionService: stubVariantSubscriptionService{payload: []byte("rules: []\n")}}
+				router := NewRouter(Dependencies{Sessions: testSessions, SubscriptionService: svc})
+				req := httptest.NewRequest(http.MethodGet, "https://sub.example.com"+path+"?user=charley"+tt.query, nil)
+				if path == "/api/sub/preview" {
+					addSessionCookie(req)
+				}
+				rec := httptest.NewRecorder()
+				router.ServeHTTP(rec, req)
+				if rec.Code != http.StatusOK || rec.Body.String() != "rules: []\n" {
+					t.Fatalf("unexpected response: %d %s", rec.Code, rec.Body.String())
+				}
+				if svc.user != "charley" || svc.options != tt.want || svc.baseURL != "https://sub.example.com" {
+					t.Fatalf("unexpected request: user=%q options=%+v baseURL=%q", svc.user, svc.options, svc.baseURL)
+				}
+			})
+		}
+	}
 }
 
 func TestSubRequiresUserQuery(t *testing.T) {

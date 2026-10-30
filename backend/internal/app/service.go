@@ -30,6 +30,11 @@ type XUIResolver interface {
 type ResolverFactory func(cfg config.XUIConfig) XUIResolver
 type ModeTemplateLoader func(dir, mode string) (string, error)
 
+type SubscriptionOptions struct {
+	Variant string
+	Mode    string
+}
+
 type Service struct {
 	ConfigDir       string
 	Loader          func(string) (config.Bundle, error)
@@ -66,6 +71,15 @@ func (s Service) GenerateWithBaseURL(user, publicBaseURL string) ([]byte, error)
 }
 
 func (s Service) GenerateWithBaseURLAndVariant(user, publicBaseURL, variant string) ([]byte, error) {
+	return s.GenerateWithOptions(user, publicBaseURL, SubscriptionOptions{Variant: variant})
+}
+
+func (s Service) GenerateWithOptions(user, publicBaseURL string, options SubscriptionOptions) ([]byte, error) {
+	requestMode := strings.ToLower(strings.TrimSpace(options.Mode))
+	if requestMode != "" && requestMode != "wg" {
+		return nil, fmt.Errorf("unsupported subscription mode %q", options.Mode)
+	}
+
 	bundle, err := s.loadBundle()
 	if err != nil {
 		return nil, err
@@ -96,7 +110,7 @@ func (s Service) GenerateWithBaseURLAndVariant(user, publicBaseURL, variant stri
 		return nil, fmt.Errorf("load providers: %w", err)
 	}
 	providers = withProviderPublicBaseURL(providers, publicBaseURL)
-	templateMode, err := templateModeForVariant(mode, variant)
+	templateMode, err := templateModeForVariant(mode, options.Variant)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +124,7 @@ func (s Service) GenerateWithBaseURLAndVariant(user, publicBaseURL, variant stri
 	}
 
 	groupList := groups.Build(bundle.Groups, nodes, bundle.App.UserGroupNodes[user], bundle.App.UserGroupModes[user], bundle.App.UserProviders[user])
-	raw, err := generator.BuildFinalYAML(templateRaw, nodes, groupList, providers, bundle.App.UserProviders[user], mainProxyGroupName(bundle.Groups, groupList))
+	raw, err := generator.BuildFinalYAML(templateRaw, nodes, groupList, providers, bundle.App.UserProviders[user], mainProxyGroupName(bundle.Groups, groupList), requestMode == "wg")
 	if err != nil {
 		return nil, fmt.Errorf("build final yaml: %w", err)
 	}

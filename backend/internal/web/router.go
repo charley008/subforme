@@ -25,6 +25,10 @@ type VariantSubscriptionService interface {
 	GenerateWithBaseURLAndVariant(user, publicBaseURL, variant string) ([]byte, error)
 }
 
+type OptionsSubscriptionService interface {
+	GenerateWithOptions(user, publicBaseURL string, options app.SubscriptionOptions) ([]byte, error)
+}
+
 type AuthService interface {
 	Check(username, password string) bool
 	UpdatePassword(newPassword string)

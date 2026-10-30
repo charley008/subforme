@@ -10,7 +10,7 @@ import (
 
 func TestSubscriptionAndPreviewUseSameOverrides(t *testing.T) {
 	node := xui.Node{Name: "test", Type: "vless", Server: "example.com", Port: 443, UUID: "uuid", TLS: true, RealityPublicKey: "pk", RealityShortID: "sid", MihomoOptions: "reality-opts:\n  support-x25519mlkem768: false\nfuture-key: [one, two]"}
-	raw, err := BuildFinalYAML("proxies: []\nproxy-groups: []", []xui.Node{node}, nil, nil, nil, "")
+	raw, err := BuildFinalYAML("proxies: []\nproxy-groups: []", []xui.Node{node}, nil, nil, nil, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestSubscriptionAndPreviewUseSameOverrides(t *testing.T) {
 		t.Fatalf("unexpected proxy: %#v", got)
 	}
 	node.MihomoOptions = "name: broken-reference"
-	if _, err := BuildFinalYAML("proxies: []", []xui.Node{node}, nil, nil, nil, ""); err == nil {
+	if _, err := BuildFinalYAML("proxies: []", []xui.Node{node}, nil, nil, nil, "", false); err == nil {
 		t.Fatal("expected protected name rejection")
 	}
 }
