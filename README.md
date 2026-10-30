@@ -133,6 +133,25 @@ server {
 
 > 订阅链接格式：`https://example.com/api/sub?user=xxx`
 
+## 按用户 Provider 分配生成规则
+
+在规则模板的 `rules` 中，将 `# @provider:<Provider ID>` 单独放在需要条件判断的规则上一行：
+
+```yaml
+rules:
+  # @provider:home-wg
+  - IP-CIDR,192.168.1.0/24,家庭-WireGuard,no-resolve
+
+  # @provider:office-wg
+  - IP-CIDR,10.10.0.0/16,办公室-WireGuard,no-resolve
+
+  - GEOIP,CN,DIRECT
+```
+
+标记使用现有 Provider 的 **ID**（不是显示名称或代理组名称）。只有当前用户已分配且仍存在的 Provider 才满足条件；否则整条规则跳过。满足条件时输出正常规则，移除标记注释。
+
+每个标记仅作用于紧随其后的一条规则，多条规则需要分别添加标记。没有标记的规则保持原有行为。此用法适用于白名单、黑名单和 iOS 规则模板，无需新增用户配置或数据库表。
+
 ## 本地构建
 
 ### 构建前端

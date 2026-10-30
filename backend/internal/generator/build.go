@@ -45,6 +45,7 @@ func BuildFinalYAML(templateRaw string, nodes []xui.Node, groupList []groups.Pro
 			}
 		}
 	}
+	filterProviderRules(doc, selectedSet)
 
 	groupEntries := convertGroups(groupList)
 	for _, addon := range selectedSet {
